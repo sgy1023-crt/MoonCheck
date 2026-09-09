@@ -208,7 +208,7 @@ test "nested object wrong inner type path" {
 
 test "nested required object missing at top" {
   let schema : Type = profile_schema()
-  let value : Json = {}
+  let value : Json = Json::empty_object()
   let errors = validate(schema, value)
   assert_eq(errors[0].path, "$.user")
 }
@@ -292,4 +292,80 @@ test "enum still enforces base type" {
   let schema : Type = obj1(m)
   let errors = validate(schema, { "method": 3 })
   assert_eq(errors[0].kind, Type)
+}
+
+// --- schema parser ---------------------------------------------------------
+
+fn schema_of(raw : String) -> Type {
+  try {
+    parse_schema_string(raw)
+  } catch {
+    _ => panic()
+  }
+}
+
+test "parse simple object schema and validate" {
+  let schema = schema_of(
+    "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\",\"required\":true,\"minLength\":2},\"age\":{\"type\":\"int\",\"required\":true,\"min\":0,\"max\":150}}}",
+  )
+  let value : Json = { "name": "alice", "age": 30 }
+  assert_true(is_valid(schema, value))
+  let errors = validate(schema, { "name": "a", "age": 200 })
+  assert_eq(errors.length(), 2)
+  assert_eq(errors[0].path, "$.name")
+  assert_eq(errors[0].kind, TooShort)
+  assert_eq(errors[1].path, "$.age")
+  assert_eq(errors[1].kind, AboveMaximum)
+}
+
+test "parse enum and nested array from schema doc" {
+  let schema = schema_of(
+    "{\"type\":\"object\",\"properties\":{\"method\":{\"type\":\"string\",\"required\":true,\"enum\":[\"GET\",\"POST\"]},\"tags\":{\"type\":\"array\",\"required\":false,\"items\":{\"type\":\"int\",\"min\":0},\"maxItems\":3}}}",
+  )
+  let ok : Json = { "method": "GET", "tags": [1, 2] }
+  assert_true(is_valid(schema, ok))
+  let errors = validate(schema, { "method": "PUT", "tags": [1, -2, 3, 4] })
+  assert_eq(errors.length(), 3)
+  assert_eq(errors[0].kind, NotInEnum)
+  assert_eq(errors[1].kind, TooLong)
+  assert_eq(errors[2].kind, BelowMinimum)
+}
+
+test "parse nested object schema doc" {
+  let schema = schema_of(
+    "{\"type\":\"object\",\"properties\":{\"user\":{\"type\":\"object\",\"required\":true,\"properties\":{\"email\":{\"type\":\"string\",\"required\":true}}}}}",
+  )
+  let errors = validate(schema, { "user": { "email": 7 } })
+  assert_eq(errors[0].path, "$.user.email")
+  assert_eq(errors[0].message, "expected String, got Number")
+}
+
+test "schema parser rejects unknown type" {
+  let caught = try {
+    let _ = parse_schema_string("{\"type\":\"wat\"}")
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(caught)
+}
+
+test "schema parser rejects missing items" {
+  let caught = try {
+    let _ = parse_schema_string("{\"type\":\"array\"}")
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(caught)
+}
+
+test "schema parser rejects bad json" {
+  let caught = try {
+    let _ = parse_schema_string("{ not json")
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(caught)
 }

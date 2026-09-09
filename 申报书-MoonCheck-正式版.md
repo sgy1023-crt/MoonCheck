@@ -6,7 +6,7 @@ MoonCheck 是一个用 MoonBit 实现的轻量级、可复用的 JSON / API 参�
 
 ## 二、项目背景与目标
 
-REST API 请求参数、JSON 配置文件、以及大模型 Agent 的 Tool Call 参数，都需要在做进一步处理前先被"检查一遍"：字段是否齐全、类型是否正确、取值范围是否合法。现有做法要么依赖重量级的 JSON Schema 标准与框架，要么与特定运行框架强绑定。
+REST API 请求参数、JSON 配置文件、以及大模型 Agent 的 Tool Call 参数，都需要在做进一步处理前先被「检查一遍」：字段是否齐全、类型是否正确、取值范围是否合法。现有做法要么依赖重量级的 JSON Schema 标准与框架，要么与特定运行框架强绑定。
 
 本项目目标：用 MoonBit 提供一个**小而完整**、可被任何上层直接复用的通用校验工具，而不只是服务于 MoonBit 自身。MoonCheck 是通用的开发工具，核心实现全部使用 MoonBit 编写，仅依赖 MoonBit 官方标准库。
 
@@ -22,7 +22,7 @@ REST API 请求参数、JSON 配置文件、以及大模型 Agent 的 Tool Call 
 - 错误输出结构化：每条错误包含 JSON Pointer 式**路径**（如 `$.user.age`、`$.tags[0]`）、机器可读的错误分类、以及人类可读的原因（如 `expected Int, got String`、`required field is missing`）。
 - 校验时**收集全部问题**，而不是遇到第一个错误就停止。
 - Schema 以普通 JSON 文档描述，跨语言易读、易于维护；也支持直接在 MoonBit 代码中构造。
-- CLI：`mooncheck validate schema.json data.json`，支持 `--help` / `--version`；退出码约定：0 表示校验通过、非 0 表示失败，并打印错误。
+- CLI：`mooncheck validate schema.json data.json`（`validate` 可省略），支持 `--help` / `--version`；退出码约定：0 表示校验通过，1 表示校验失败（打印错误），2 表示用法或读取错误。
 
 ## 四、典型使用场景
 

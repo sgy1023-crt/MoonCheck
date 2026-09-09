@@ -19,6 +19,28 @@ pub fn is_valid(schema : Type, value : Json) -> Bool {
   validate(schema, value).is_empty()
 }
 
+/// Validate in one step from raw text.
+///
+/// Takes a schema document and a data document, both as JSON text.
+/// Returns `Ok(errors)` where an empty list means the data is valid, or
+/// `Err(reason)` when either document could not be parsed.
+pub fn validate_strings(
+  schema_text : String,
+  data_text : String
+) -> Result[Array[ValidationError], String] {
+  let schema = try {
+    parse_schema_string(schema_text)
+  } catch {
+    SchemaError::InvalidSchema(msg) => return Err("invalid schema: \{msg}")
+  }
+  let data = try {
+    @json.parse(data_text)
+  } catch {
+    err => return Err("data is not valid JSON: \{err}")
+  }
+  return Ok(validate(schema, data))
+}
+
 fn check(typ : Type, value : Json, path : String, out : Array[ValidationError]) -> Unit {
   match typ {
     Str(spec) => check_string(spec, value, path, out)

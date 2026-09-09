@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "properties": {
+    "action": { "type": "string", "required": true, "enum": ["click", "type", "scroll"] },
+    "x":      { "type": "int", "required": true, "min": 0, "max": 1920 },
+    "y":      { "type": "int", "required": true, "min": 0, "max": 1080 },
+    "text":   { "type": "string", "required": false, "maxLength": 100 }
+  }
+}

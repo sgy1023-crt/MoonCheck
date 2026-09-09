@@ -1,0 +1,5 @@
+import {
+  "sgy1023-crt/MoonCheck" @lib,
+}
+
+pkgtype(kind: "executable")

@@ -1,0 +1,5 @@
+// import {
+//   "username/MoonCheck" @lib,
+// }
+
+pkgtype(kind: "executable")

@@ -7,7 +7,7 @@
 
 - 项目名：MoonCheck
 - 仓库本地路径：`H:\claude code workspace\2026 MoonBit 国产基础软件开源大赛 - 9 月黑客松\MoonCheck`
-- GitHub 仓库：**尚未创建/推送**（本机无 gh CLI；待创建后填写 `moon.mod` 的 repository 字段）
+- GitHub 仓库：https://github.com/sgy1023-crt/MoonCheck （**public，已推送**，默认分支 main）
 - moon.mod 模块名：`sgy1023-crt/MoonCheck`
 - 主要实现语言：MoonBit（标准库：`moonbitlang/core` 的 json / double / debug 等）
 - 使用的 MoonBit 工具链：moon 0.1.20260904（2026-09-04 构建）
@@ -45,7 +45,7 @@
 
 ## Git 状态
 
-- commit 数：9（截至最后核对时；最终会 ≥ 10）
+- commit 数：12（截至最终核对时；均为真实、独立、可构建的内容变更）
 - commit 均为真实、独立、可构建的内容变更（初始化 / 类型 / 引擎 / 测试 / 解析器 / CLI / 端到端测试 / 示例等）
 - 提交作者（repo 本地 config）：`sgy1023-crt <143707312+sgy1023-crt@users.noreply.github.com>`
 

@@ -24,3 +24,7 @@ keywords = ["json", "validation", "schema", "cli"]
 preferred_target = "wasm"
 
 description = "A lightweight, reusable JSON / API parameter validator with a CLI, written in MoonBit."
+
+import {
+  "moonbitlang/async@0.21.3",
+}

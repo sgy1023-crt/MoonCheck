@@ -1,5 +1,12 @@
-// import {
-//   "username/MoonCheck" @lib,
-// }
+import {
+  "sgy1023-crt/MoonCheck" @lib,
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/io",
+  "moonbitlang/core/abort",
+  "moonbitlang/core/env",
+}
 
 pkgtype(kind: "executable")
+
+supported_targets = "native"

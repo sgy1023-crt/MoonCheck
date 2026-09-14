@@ -1,0 +1,5 @@
+{
+  "host": "worker.internal",
+  "port": 9000,
+  "timeout": 120
+}

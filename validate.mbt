@@ -41,6 +41,35 @@ pub fn validate_strings(
   return Ok(validate(schema, data))
 }
 
+/// Parse a schema document, returning the reason as a string on failure.
+///
+/// Batch and CLI callers parse the schema once and reuse it for every data
+/// document, so a broken schema is reported separately from data errors.
+pub fn parse_schema_text(text : String) -> Result[Type, String] {
+  try {
+    Ok(parse_schema_string(text))
+  } catch {
+    SchemaError::InvalidSchema(msg) => Err(msg)
+  }
+}
+
+/// Validate a data document against an already parsed schema.
+///
+/// Unlike `validate_strings`, a data document that is not valid JSON is
+/// reported as a single `InvalidJson` error instead of aborting the call, so
+/// callers that process many documents can keep going and report everything.
+pub fn validate_text(schema : Type, data_text : String) -> Array[ValidationError] {
+  let data = try {
+    @json.parse(data_text)
+  } catch {
+    err =>
+      return [
+        { path: "$", kind: InvalidJson, message: "data is not valid JSON: \{err}" },
+      ]
+  }
+  return validate(schema, data)
+}
+
 fn check(typ : Type, value : Json, path : String, out : Array[ValidationError]) -> Unit {
   match typ {
     Str(spec) => check_string(spec, value, path, out)

@@ -70,3 +70,22 @@ test "schema parser rejects unknown type" {
   }
   assert_true(caught)
 }
+
+test "batch report API is usable from another package" {
+  let schema = match @MoonCheck.parse_schema_text("{\"type\":\"int\"}") {
+    Ok(schema) => schema
+    Err(reason) => fail(reason)
+  }
+  let results = [
+    @MoonCheck.FileResult::new("ok.json", @MoonCheck.validate_text(schema, "1")),
+    @MoonCheck.FileResult::new("bad.json", @MoonCheck.validate_text(schema, "\"x\"")),
+  ]
+  let report = @MoonCheck.RunReport::new("s.json", results)
+  assert_eq(report.failed(), 1)
+  assert_eq(report.total_errors(), 1)
+  assert_eq(report.is_ok(), false)
+  let json_text = @MoonCheck.render(report, @MoonCheck.ReportFormat::json(), false)
+  assert_true(json_text.contains("\"failed\": 1"))
+  let text = @MoonCheck.render(report, @MoonCheck.ReportFormat::text(), true)
+  assert_eq(text, "bad.json: $: expected Int, got String")
+}

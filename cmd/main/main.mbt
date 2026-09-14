@@ -1,56 +1,58 @@
 /// MoonCheck command line interface.
 ///
-/// Usage:
-///   mooncheck validate <schema.json> <data.json>
-///
-/// Prints a report and exits with:
-///   - 0 when the data is valid
-///   - non-zero when it is invalid or an error occurred
-///
-/// The leading `validate` subcommand is optional; passing two file paths
-/// directly is equivalent.
+/// This executable is deliberately thin: argument parsing, validation and
+/// report rendering all live in the library package, where they are unit
+/// tested on every backend. Here we only read files, print the rendered report
+/// and pick the exit status.
 
 async fn main {
   let argv = @env.args()
-  let args = argv[1:]
-  if args.is_empty() {
-    println(usage())
-    @abort.abort("error: expected a schema file and a data file")
-  }
-  if args[0] == "--help" || args[0] == "-h" {
-    println(usage())
-    return
-  }
-  if args[0] == "--version" || args[0] == "-V" {
-    println(version())
-    return
-  }
-
-  // Accept an optional leading `validate` subcommand.
-  let offset = if args[0] == "validate" { 1 } else { 0 }
-  if args.length() < offset + 2 {
-    println(usage())
-    @abort.abort("error: expected a schema file and a data file")
-  }
-  let schema_path = args[offset]
-  let data_path = args[offset + 1]
-
-  let schema_text = read_or_abort(schema_path)
-  let data_text = read_or_abort(data_path)
-
-  match @lib.validate_strings(schema_text, data_text) {
-    Err(reason) => @abort.abort("error: \{reason}")
-    Ok(errors) if errors.is_empty() =>
-      println("valid: data matches the schema")
-    Ok(errors) => {
-      for error in errors {
-        println(@lib.to_string(error))
-      }
-      @abort.abort("error: \{errors.length()} validation error(s)")
+  match @lib.parse_args(argv[1:]) {
+    @lib.CliCommand::Help => println(@lib.usage_text())
+    @lib.CliCommand::Version => println(@lib.version_text())
+    @lib.CliCommand::Invalid(msg) => {
+      println(@lib.usage_text())
+      @abort.abort("error: \{msg}")
     }
+    @lib.CliCommand::CheckSchema(opts) => check_schema(opts.path)
+    @lib.CliCommand::Validate(opts) => validate_all(opts)
   }
 }
 
+/// Report whether a schema document is well formed.
+async fn check_schema(path : String) -> Unit {
+  let text = read_or_abort(path)
+  match @lib.parse_schema_text(text) {
+    Ok(_) => println("schema is valid: \{path}")
+    Err(reason) => @abort.abort("error: invalid schema \"\{path}\": \{reason}")
+  }
+}
+
+/// Validate every data document against one schema and report as a whole.
+async fn validate_all(opts : @lib.ValidateOptions) -> Unit {
+  let schema_text = read_or_abort(opts.schema)
+  let schema = match @lib.parse_schema_text(schema_text) {
+    Ok(schema) => schema
+    Err(reason) => @abort.abort("error: invalid schema \"\{opts.schema}\": \{reason}")
+  }
+  let results : Array[@lib.FileResult] = []
+  for path in opts.data {
+    let text = read_or_abort(path)
+    results.push(@lib.FileResult::new(path, @lib.validate_text(schema, text)))
+  }
+  let report = @lib.RunReport::new(opts.schema, results)
+  let rendered = @lib.render(report, opts.format, opts.quiet)
+  if rendered != "" {
+    println(rendered)
+  }
+  if !report.is_ok() {
+    @abort.abort(
+      "error: \{report.failed()} of \{report.results.length()} document(s) failed validation",
+    )
+  }
+}
+
+/// Read a file as text, or stop with a clear message.
 async fn read_or_abort(path : String) -> String {
   let data = try {
     @fs.read_file(path)
@@ -63,30 +65,4 @@ async fn read_or_abort(path : String) -> String {
     err => @abort.abort("error: cannot decode \"\{path}\" as text: \{err}")
   }
   return text
-}
-
-fn usage() -> String {
-  let text =
-    #|MoonCheck - validate JSON data against a lightweight schema
-    #|
-    #|Usage:
-    #|  mooncheck validate <schema.json> <data.json>
-    #|
-    #|Arguments:
-    #|  schema.json   path to the schema document
-    #|  data.json     path to the JSON data to validate
-    #|
-    #|Options:
-    #|  -h, --help     Show this help message
-    #|  -V, --version  Show version
-    #|
-    #|Exit codes:
-    #|  0   data is valid
-    #|  1   data is invalid (errors are printed)
-    #|  2   usage or I/O error
-  return text
-}
-
-fn version() -> String {
-  return "mooncheck 0.1.0"
 }

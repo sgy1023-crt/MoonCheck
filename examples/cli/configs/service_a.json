@@ -1,0 +1,6 @@
+{
+  "host": "api.internal",
+  "port": 8443,
+  "debug": false,
+  "timeout": 30
+}

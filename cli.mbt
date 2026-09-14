@@ -5,6 +5,7 @@
 // thin I/O shell that only reads files, prints the rendered report and sets
 // the exit status.
 
+///|
 /// Options of the `validate` subcommand.
 pub struct ValidateOptions {
   /// Output format for the report.
@@ -17,12 +18,14 @@ pub struct ValidateOptions {
   data : Array[String]
 } derive(Eq, @debug.Debug)
 
+///|
 /// Options of the `check-schema` subcommand.
 pub struct CheckSchemaOptions {
   /// Path of the schema document.
   path : String
 } derive(Eq, @debug.Debug)
 
+///|
 /// A parsed command line.
 pub enum CliCommand {
   /// `--help`
@@ -37,6 +40,7 @@ pub enum CliCommand {
   Invalid(String)
 } derive(Eq, @debug.Debug)
 
+///|
 /// Parse a command line (without the program name).
 ///
 /// `validate` is optional, so `mooncheck validate s.json d.json` and
@@ -58,7 +62,7 @@ pub fn parse_args(argv : ArrayView[String]) -> CliCommand {
     if argv.length() != 2 {
       return Invalid("check-schema takes exactly one schema file")
     }
-    return CheckSchema({ path: argv[1] })
+    return CheckSchema({ path: argv[1], })
   }
   let mut format = Text
   let mut quiet = false
@@ -101,9 +105,10 @@ pub fn parse_args(argv : ArrayView[String]) -> CliCommand {
     data.push(paths[j])
     j = j + 1
   }
-  return Validate({ format: format, quiet: quiet, schema: paths[0], data: data })
+  return Validate({ format, quiet, schema: paths[0], data, })
 }
 
+///|
 /// Usage text, printed by `--help` and after a usage error.
 pub fn usage_text() -> String {
   let text =
@@ -130,6 +135,7 @@ pub fn usage_text() -> String {
   return text
 }
 
+///|
 /// Version text, printed by `--version`.
 pub fn version_text() -> String {
   return "mooncheck 0.1.0"

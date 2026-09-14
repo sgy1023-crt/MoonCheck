@@ -1,5 +1,7 @@
 # MoonCheck
 
+[![CI](https://github.com/sgy1023-crt/MoonCheck/actions/workflows/ci.yml/badge.svg)](https://github.com/sgy1023-crt/MoonCheck/actions/workflows/ci.yml)
+
 A lightweight, reusable JSON / API parameter validator with a CLI, written in MoonBit.
 
 MoonCheck validates JSON data against a small, hand-written schema and reports

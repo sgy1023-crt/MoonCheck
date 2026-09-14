@@ -19,7 +19,7 @@ repository = "https://github.com/sgy1023-crt/MoonCheck"
 
 license = "Apache-2.0"
 
-keywords = ["json", "validation", "schema", "cli"]
+keywords = [ "json", "validation", "schema", "cli" ]
 
 preferred_target = "wasm"
 

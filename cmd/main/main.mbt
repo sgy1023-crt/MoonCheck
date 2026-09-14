@@ -1,10 +1,10 @@
+///|
 /// MoonCheck command line interface.
 ///
 /// This executable is deliberately thin: argument parsing, validation and
 /// report rendering all live in the library package, where they are unit
 /// tested on every backend. Here we only read files, print the rendered report
 /// and pick the exit status.
-
 async fn main {
   let argv = @env.args()
   match @lib.parse_args(argv[1:]) {
@@ -19,6 +19,7 @@ async fn main {
   }
 }
 
+///|
 /// Report whether a schema document is well formed.
 async fn check_schema(path : String) -> Unit {
   let text = read_or_abort(path)
@@ -28,12 +29,14 @@ async fn check_schema(path : String) -> Unit {
   }
 }
 
+///|
 /// Validate every data document against one schema and report as a whole.
 async fn validate_all(opts : @lib.ValidateOptions) -> Unit {
   let schema_text = read_or_abort(opts.schema)
   let schema = match @lib.parse_schema_text(schema_text) {
     Ok(schema) => schema
-    Err(reason) => @abort.abort("error: invalid schema \"\{opts.schema}\": \{reason}")
+    Err(reason) =>
+      @abort.abort("error: invalid schema \"\{opts.schema}\": \{reason}")
   }
   let results : Array[@lib.FileResult] = []
   for path in opts.data {
@@ -52,16 +55,13 @@ async fn validate_all(opts : @lib.ValidateOptions) -> Unit {
   }
 }
 
+///|
 /// Read a file as text, or stop with a clear message.
 async fn read_or_abort(path : String) -> String {
-  let data = try {
-    @fs.read_file(path)
-  } catch {
+  let data = @fs.read_file(path) catch {
     err => @abort.abort("error: cannot read \"\{path}\": \{err}")
   }
-  let text = try {
-    data.text()
-  } catch {
+  let text = data.text() catch {
     err => @abort.abort("error: cannot decode \"\{path}\" as text: \{err}")
   }
   return text

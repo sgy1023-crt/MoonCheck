@@ -3,6 +3,7 @@
 // The CLI contract lives in the library precisely so these cases can be
 // tested on every backend, without building or running a native binary.
 
+///|
 test "parse: no arguments is a usage error" {
   match parse_args([]) {
     Invalid(msg) => assert_true(msg.contains("expected a schema file"))
@@ -10,6 +11,7 @@ test "parse: no arguments is a usage error" {
   }
 }
 
+///|
 test "parse: --help and --version" {
   assert_eq(parse_args(["--help"]), Help)
   assert_eq(parse_args(["-h"]), Help)
@@ -17,6 +19,7 @@ test "parse: --help and --version" {
   assert_eq(parse_args(["-V"]), Version)
 }
 
+///|
 test "parse: implicit validate with one data file" {
   match parse_args(["s.json", "d.json"]) {
     Validate(opts) => {
@@ -30,6 +33,7 @@ test "parse: implicit validate with one data file" {
   }
 }
 
+///|
 test "parse: explicit validate subcommand" {
   match parse_args(["validate", "s.json", "d.json"]) {
     Validate(opts) => assert_eq(opts.schema, "s.json")
@@ -37,6 +41,7 @@ test "parse: explicit validate subcommand" {
   }
 }
 
+///|
 test "parse: several data files keep their order" {
   match parse_args(["validate", "s.json", "a.json", "b.json", "c.json"]) {
     Validate(opts) => {
@@ -49,6 +54,7 @@ test "parse: several data files keep their order" {
   }
 }
 
+///|
 test "parse: schema alone is not enough" {
   match parse_args(["s.json"]) {
     Invalid(msg) => assert_true(msg.contains("at least one data file"))
@@ -56,6 +62,7 @@ test "parse: schema alone is not enough" {
   }
 }
 
+///|
 test "parse: --report json and text" {
   match parse_args(["s.json", "d.json", "--report", "json"]) {
     Validate(opts) => assert_eq(opts.format, Json)
@@ -67,6 +74,7 @@ test "parse: --report json and text" {
   }
 }
 
+///|
 test "parse: --report rejects a bad value and a missing value" {
   match parse_args(["s.json", "d.json", "--report", "xml"]) {
     Invalid(msg) => assert_true(msg.contains("text or json"))
@@ -78,6 +86,7 @@ test "parse: --report rejects a bad value and a missing value" {
   }
 }
 
+///|
 test "parse: --quiet and -q" {
   match parse_args(["s.json", "d.json", "--quiet"]) {
     Validate(opts) => assert_eq(opts.quiet, true)
@@ -89,8 +98,10 @@ test "parse: --quiet and -q" {
   }
 }
 
+///|
 test "parse: options may follow the paths" {
-  match parse_args(["s.json", "a.json", "b.json", "--quiet", "--report", "json"]) {
+  match
+    parse_args(["s.json", "a.json", "b.json", "--quiet", "--report", "json"]) {
     Validate(opts) => {
       assert_eq(opts.quiet, true)
       assert_eq(opts.format, Json)
@@ -100,6 +111,7 @@ test "parse: options may follow the paths" {
   }
 }
 
+///|
 test "parse: unknown option is rejected" {
   match parse_args(["s.json", "d.json", "--verbose"]) {
     Invalid(msg) => assert_true(msg.contains("unknown option: --verbose"))
@@ -107,6 +119,7 @@ test "parse: unknown option is rejected" {
   }
 }
 
+///|
 test "parse: a lone dash is a path, not an option" {
   match parse_args(["s.json", "-"]) {
     Validate(opts) => assert_eq(opts.data[0], "-")
@@ -114,6 +127,7 @@ test "parse: a lone dash is a path, not an option" {
   }
 }
 
+///|
 test "parse: check-schema takes exactly one schema file" {
   match parse_args(["check-schema", "s.json"]) {
     CheckSchema(opts) => assert_eq(opts.path, "s.json")
@@ -129,6 +143,7 @@ test "parse: check-schema takes exactly one schema file" {
   }
 }
 
+///|
 test "usage and version text are non-empty" {
   assert_true(usage_text().contains("mooncheck validate"))
   assert_true(usage_text().contains("--report"))
@@ -140,11 +155,14 @@ test "usage and version text are non-empty" {
 // These mirror what `cmd/main` does, minus the file reading, so the whole CLI
 // behaviour is covered by tests that run on every backend.
 
+///|
 test "cli flow: batch run over several documents" {
-  let schema_text =
-    "{\"type\":\"object\",\"properties\":{\"age\":{\"type\":\"int\",\"required\":true,\"min\":0}}}"
+  let schema_text = "{\"type\":\"object\",\"properties\":{\"age\":{\"type\":\"int\",\"required\":true,\"min\":0}}}"
   let documents = [("a.json", "{\"age\": 3}"), ("b.json", "{\"age\": \"x\"}")]
-  match parse_args(["validate", "schema.json", "a.json", "b.json", "--report", "json"]) {
+  match
+    parse_args([
+      "validate", "schema.json", "a.json", "b.json", "--report", "json",
+    ]) {
     Validate(opts) => {
       let schema = match parse_schema_text(schema_text) {
         Ok(schema) => schema
@@ -168,6 +186,7 @@ test "cli flow: batch run over several documents" {
   }
 }
 
+///|
 test "cli flow: a malformed document is reported instead of fatal" {
   let schema = match parse_schema_text("{\"type\":\"string\"}") {
     Ok(schema) => schema
@@ -180,6 +199,7 @@ test "cli flow: a malformed document is reported instead of fatal" {
   assert_eq(errors[0].path, "$")
 }
 
+///|
 test "cli flow: a broken schema is reported separately from data" {
   match parse_schema_text("{\"type\":\"nope\"}") {
     Err(reason) => assert_true(reason.contains("unknown schema type"))

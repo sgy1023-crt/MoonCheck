@@ -6,26 +6,31 @@
 
 // --- helpers ---------------------------------------------------------------
 
+///|
 fn str_schema(min_length : Int?, max_length : Int?) -> Type {
-  Str({ min_length, max_length })
+  Str({ min_length, max_length, })
 }
 
+///|
 fn int_schema(min : Double?, max : Double?) -> Type {
-  Int({ min, max })
+  Int({ min, max, })
 }
 
+///|
 fn obj1(props : Map[String, Prop]) -> Type {
-  Obj({ properties: props })
+  Obj({ properties: props, })
 }
 
 // --- string ----------------------------------------------------------------
 
+///|
 test "valid string" {
   let schema : Type = str_schema(None, None)
   let value : Json = "hello"
   assert_true(is_valid(schema, value))
 }
 
+///|
 test "string too short" {
   let schema : Type = str_schema(Some(3), None)
   let value : Json = "ab"
@@ -36,6 +41,7 @@ test "string too short" {
   assert_eq(to_string(errors[0]), "$: length must be at least 3, got 2")
 }
 
+///|
 test "string too long" {
   let schema : Type = str_schema(None, Some(2))
   let value : Json = "abcd"
@@ -44,6 +50,7 @@ test "string too long" {
   assert_eq(errors[0].kind, TooLong)
 }
 
+///|
 test "string rejects number" {
   let schema : Type = str_schema(None, None)
   let value : Json = 5
@@ -55,12 +62,14 @@ test "string rejects number" {
 
 // --- numeric ---------------------------------------------------------------
 
+///|
 test "valid int within range" {
   let schema : Type = int_schema(Some(0.0), Some(150.0))
   let value : Json = 42
   assert_true(is_valid(schema, value))
 }
 
+///|
 test "int rejects decimal" {
   let schema : Type = int_schema(None, None)
   let value : Json = 3.5
@@ -70,6 +79,7 @@ test "int rejects decimal" {
   assert_eq(errors[0].message, "expected Int, got Number")
 }
 
+///|
 test "int rejects string" {
   let schema : Type = int_schema(None, None)
   let value : Json = "42"
@@ -77,6 +87,7 @@ test "int rejects string" {
   assert_eq(errors[0].message, "expected Int, got String")
 }
 
+///|
 test "int below minimum" {
   let schema : Type = int_schema(Some(0.0), None)
   let value : Json = -1
@@ -85,6 +96,7 @@ test "int below minimum" {
   assert_eq(errors[0].kind, BelowMinimum)
 }
 
+///|
 test "int above maximum" {
   let schema : Type = int_schema(None, Some(10.0))
   let value : Json = 11
@@ -93,12 +105,14 @@ test "int above maximum" {
   assert_eq(errors[0].kind, AboveMaximum)
 }
 
+///|
 test "number accepts decimals" {
-  let schema : Type = Num({ min: None, max: None })
+  let schema : Type = Num({ min: None, max: None, })
   let value : Json = 3.25
   assert_true(is_valid(schema, value))
 }
 
+///|
 test "int boundary inclusive" {
   let schema : Type = int_schema(Some(0.0), Some(10.0))
   assert_true(is_valid(schema, 0))
@@ -107,12 +121,14 @@ test "int boundary inclusive" {
 
 // --- bool ------------------------------------------------------------------
 
+///|
 test "valid bool" {
   let schema : Type = Bool
   assert_true(is_valid(schema, true))
   assert_true(is_valid(schema, false))
 }
 
+///|
 test "bool rejects non bool" {
   let schema : Type = Bool
   let errors = validate(schema, "yes")
@@ -122,25 +138,33 @@ test "bool rejects non bool" {
 
 // --- object ----------------------------------------------------------------
 
+///|
 fn user_props() -> Map[String, Prop] {
   let m = Map([])
-  m.set("name", { typ: str_schema(None, None), required: true, enums: None })
-  m.set("age", { typ: int_schema(Some(0.0), Some(150.0)), required: false, enums: None })
+  m.set("name", { typ: str_schema(None, None), required: true, enums: None, })
+  m.set("age", {
+    typ: int_schema(Some(0.0), Some(150.0)),
+    required: false,
+    enums: None,
+  })
   return m
 }
 
+///|
 test "valid object" {
   let schema : Type = obj1(user_props())
   let value : Json = { "name": "alice", "age": 30 }
   assert_true(is_valid(schema, value))
 }
 
+///|
 test "object ignores undeclared fields" {
   let schema : Type = obj1(user_props())
   let value : Json = { "name": "alice", "city": "Beijing" }
   assert_true(is_valid(schema, value))
 }
 
+///|
 test "object missing required field" {
   let schema : Type = obj1(user_props())
   let value : Json = { "age": 30 }
@@ -151,12 +175,14 @@ test "object missing required field" {
   assert_eq(to_string(errors[0]), "$.name: required field is missing")
 }
 
+///|
 test "object optional field may be absent" {
   let schema : Type = obj1(user_props())
   let value : Json = { "name": "alice" }
   assert_true(is_valid(schema, value))
 }
 
+///|
 test "object field type error path" {
   let schema : Type = obj1(user_props())
   let value : Json = { "name": "alice", "age": "old" }
@@ -166,6 +192,7 @@ test "object field type error path" {
   assert_eq(errors[0].message, "expected Int, got String")
 }
 
+///|
 test "object is not an object" {
   let schema : Type = obj1(user_props())
   let value : Json = [1, 2]
@@ -175,20 +202,27 @@ test "object is not an object" {
 
 // --- nested object ---------------------------------------------------------
 
+///|
 fn profile_schema() -> Type {
   let inner = Map([])
-  inner.set("email", { typ: str_schema(None, None), required: true, enums: None })
+  inner.set("email", {
+    typ: str_schema(None, None),
+    required: true,
+    enums: None,
+  })
   let outer = Map([])
-  outer.set("user", { typ: obj1(inner), required: true, enums: None })
+  outer.set("user", { typ: obj1(inner), required: true, enums: None, })
   return obj1(outer)
 }
 
+///|
 test "valid nested object" {
   let schema : Type = profile_schema()
   let value : Json = { "user": { "email": "a@b.com" } }
   assert_true(is_valid(schema, value))
 }
 
+///|
 test "nested object missing inner required" {
   let schema : Type = profile_schema()
   let value : Json = { "user": {} }
@@ -198,6 +232,7 @@ test "nested object missing inner required" {
   assert_eq(errors[0].kind, MissingRequired)
 }
 
+///|
 test "nested object wrong inner type path" {
   let schema : Type = profile_schema()
   let value : Json = { "user": { "email": 42 } }
@@ -206,6 +241,7 @@ test "nested object wrong inner type path" {
   assert_eq(errors[0].message, "expected String, got Number")
 }
 
+///|
 test "nested required object missing at top" {
   let schema : Type = profile_schema()
   let value : Json = Json::empty_object()
@@ -215,14 +251,24 @@ test "nested required object missing at top" {
 
 // --- array -----------------------------------------------------------------
 
+///|
 test "valid array of ints" {
-  let schema : Type = Arr({ item: int_schema(None, None), min_length: None, max_length: None })
+  let schema : Type = Arr({
+    item: int_schema(None, None),
+    min_length: None,
+    max_length: None,
+  })
   let value : Json = [1, 2, 3]
   assert_true(is_valid(schema, value))
 }
 
+///|
 test "array element type error path" {
-  let schema : Type = Arr({ item: int_schema(None, None), min_length: None, max_length: None })
+  let schema : Type = Arr({
+    item: int_schema(None, None),
+    min_length: None,
+    max_length: None,
+  })
   let value : Json = [1, "two", 3]
   let errors = validate(schema, value)
   assert_eq(errors.length(), 1)
@@ -230,8 +276,13 @@ test "array element type error path" {
   assert_eq(errors[0].message, "expected Int, got String")
 }
 
+///|
 test "array length bounds" {
-  let schema : Type = Arr({ item: int_schema(None, None), min_length: Some(2), max_length: Some(3) })
+  let schema : Type = Arr({
+    item: int_schema(None, None),
+    min_length: Some(2),
+    max_length: Some(3),
+  })
   let errors_short = validate(schema, [1])
   assert_eq(errors_short.length(), 1)
   assert_eq(errors_short[0].kind, TooShort)
@@ -240,6 +291,7 @@ test "array length bounds" {
   assert_eq(errors_long[0].kind, TooLong)
 }
 
+///|
 test "array element nested error" {
   let schema : Type = Arr({
     item: obj1(user_props()),
@@ -252,31 +304,40 @@ test "array element nested error" {
   assert_eq(errors[0].path, "$[1].name")
 }
 
+///|
 test "array is not an array" {
-  let schema : Type = Arr({ item: int_schema(None, None), min_length: None, max_length: None })
+  let schema : Type = Arr({
+    item: int_schema(None, None),
+    min_length: None,
+    max_length: None,
+  })
   let errors = validate(schema, 5)
   assert_eq(errors[0].message, "expected Array, got Number")
 }
 
 // --- enum ------------------------------------------------------------------
 
+///|
 test "valid enum value" {
   let m = Map([])
-  m.set(
-    "method",
-    { typ: str_schema(None, None), required: true, enums: Some([("GET" : Json), ("POST" : Json)]) },
-  )
+  m.set("method", {
+    typ: str_schema(None, None),
+    required: true,
+    enums: Some([("GET" : Json), ("POST" : Json)]),
+  })
   let schema : Type = obj1(m)
   let value : Json = { "method": "POST" }
   assert_true(is_valid(schema, value))
 }
 
+///|
 test "enum rejects unknown value" {
   let m = Map([])
-  m.set(
-    "method",
-    { typ: str_schema(None, None), required: true, enums: Some([("GET" : Json), ("POST" : Json)]) },
-  )
+  m.set("method", {
+    typ: str_schema(None, None),
+    required: true,
+    enums: Some([("GET" : Json), ("POST" : Json)]),
+  })
   let schema : Type = obj1(m)
   let value : Json = { "method": "DELETE" }
   let errors = validate(schema, value)
@@ -286,9 +347,14 @@ test "enum rejects unknown value" {
   assert_eq(errors[0].message, "value must be one of [\"GET\",\"POST\"]")
 }
 
+///|
 test "enum still enforces base type" {
   let m = Map([])
-  m.set("method", { typ: str_schema(None, None), required: true, enums: Some([("GET" : Json)]) })
+  m.set("method", {
+    typ: str_schema(None, None),
+    required: true,
+    enums: Some([("GET" : Json)]),
+  })
   let schema : Type = obj1(m)
   let errors = validate(schema, { "method": 3 })
   assert_eq(errors[0].kind, Type)
@@ -296,14 +362,14 @@ test "enum still enforces base type" {
 
 // --- schema parser ---------------------------------------------------------
 
+///|
 fn schema_of(raw : String) -> Type {
-  try {
-    parse_schema_string(raw)
-  } catch {
+  parse_schema_string(raw) catch {
     _ => panic()
   }
 }
 
+///|
 test "parse simple object schema and validate" {
   let schema = schema_of(
     "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\",\"required\":true,\"minLength\":2},\"age\":{\"type\":\"int\",\"required\":true,\"min\":0,\"max\":150}}}",
@@ -318,6 +384,7 @@ test "parse simple object schema and validate" {
   assert_eq(errors[1].kind, AboveMaximum)
 }
 
+///|
 test "parse enum and nested array from schema doc" {
   let schema = schema_of(
     "{\"type\":\"object\",\"properties\":{\"method\":{\"type\":\"string\",\"required\":true,\"enum\":[\"GET\",\"POST\"]},\"tags\":{\"type\":\"array\",\"required\":false,\"items\":{\"type\":\"int\",\"min\":0},\"maxItems\":3}}}",
@@ -331,6 +398,7 @@ test "parse enum and nested array from schema doc" {
   assert_eq(errors[2].kind, BelowMinimum)
 }
 
+///|
 test "parse nested object schema doc" {
   let schema = schema_of(
     "{\"type\":\"object\",\"properties\":{\"user\":{\"type\":\"object\",\"required\":true,\"properties\":{\"email\":{\"type\":\"string\",\"required\":true}}}}}",
@@ -340,6 +408,7 @@ test "parse nested object schema doc" {
   assert_eq(errors[0].message, "expected String, got Number")
 }
 
+///|
 test "schema parser rejects unknown type" {
   let caught = try {
     let _ = parse_schema_string("{\"type\":\"wat\"}")
@@ -350,6 +419,7 @@ test "schema parser rejects unknown type" {
   assert_true(caught)
 }
 
+///|
 test "schema parser rejects missing items" {
   let caught = try {
     let _ = parse_schema_string("{\"type\":\"array\"}")
@@ -360,6 +430,7 @@ test "schema parser rejects missing items" {
   assert_true(caught)
 }
 
+///|
 test "schema parser rejects bad json" {
   let caught = try {
     let _ = parse_schema_string("{ not json")

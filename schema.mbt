@@ -7,6 +7,7 @@
 // Schemas are usually obtained by parsing a lightweight JSON schema file
 // (see `json_schema.mbt`), but they can also be built directly in code.
 
+///|
 /// Constraint set for string values.
 pub struct StrSpec {
   /// Minimum allowed length in characters.
@@ -15,6 +16,7 @@ pub struct StrSpec {
   max_length : Int?
 }
 
+///|
 /// Constraint set shared by `Int` and `Num` (number) values.
 pub struct NumSpec {
   /// Inclusive lower bound.
@@ -23,6 +25,7 @@ pub struct NumSpec {
   max : Double?
 }
 
+///|
 /// Constraint set for arrays.
 pub struct ArrSpec {
   /// Schema applied to every element.
@@ -33,6 +36,7 @@ pub struct ArrSpec {
   max_length : Int?
 }
 
+///|
 /// A single declared property of an object schema.
 pub struct Prop {
   /// The schema the property value must satisfy.
@@ -43,12 +47,14 @@ pub struct Prop {
   enums : Array[Json]?
 }
 
+///|
 /// Constraint set for objects.
 pub struct ObjSpec {
   /// Declared properties, by name.
   properties : Map[String, Prop]
 }
 
+///|
 /// The schema of a JSON value.
 pub enum Type {
   /// A JSON string, optionally length-constrained.
@@ -65,6 +71,7 @@ pub enum Type {
   Arr(ArrSpec)
 }
 
+///|
 /// The human-facing name of a schema kind, used in error messages.
 /// For example `Int` becomes `"Int"`.
 pub fn kind_name(typ : Type) -> String {
@@ -78,6 +85,7 @@ pub fn kind_name(typ : Type) -> String {
   }
 }
 
+///|
 /// The JSON type name of a concrete value, used in error messages.
 pub fn value_name(value : Json) -> String {
   match value {

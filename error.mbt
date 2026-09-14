@@ -6,6 +6,7 @@
 //   - a machine-readable kind
 //   - a human-readable reason
 
+///|
 /// Classification of a single validation problem.
 pub enum ErrorKind {
   /// A `required` field is absent from the object.
@@ -29,6 +30,7 @@ pub enum ErrorKind {
   InvalidJson
 } derive(Eq, @debug.Debug)
 
+///|
 /// A single validation error.
 pub struct ValidationError {
   /// Path of the offending value, e.g. `$.user.age` or `$.tags[0]`.
@@ -39,11 +41,13 @@ pub struct ValidationError {
   message : String
 } derive(Eq, @debug.Debug)
 
+///|
 /// Render one error as a single line: `$.user.age: expected Int, got String`.
 pub fn to_string(error : ValidationError) -> String {
   "\{error.path}: \{error.message}"
 }
 
+///|
 /// Stable, machine-readable name of an error kind.
 ///
 /// These strings are part of the JSON report format, so they are kept short,

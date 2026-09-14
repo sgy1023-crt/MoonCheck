@@ -7,6 +7,7 @@
 // Both renderings are pure functions over a `RunReport`, so they are unit
 // tested without any I/O.
 
+///|
 /// Output format of a validation report.
 pub enum ReportFormat {
   /// One line per error (default).
@@ -15,6 +16,7 @@ pub enum ReportFormat {
   Json
 } derive(Eq, @debug.Debug)
 
+///|
 /// The text report format.
 ///
 /// A constructor function, so callers in other packages do not have to spell
@@ -23,11 +25,13 @@ pub fn ReportFormat::text() -> ReportFormat {
   Text
 }
 
+///|
 /// The JSON report format.
 pub fn ReportFormat::json() -> ReportFormat {
   Json
 }
 
+///|
 /// The validation outcome for one data document.
 pub struct FileResult {
   /// Name of the document, usually the path that was read.
@@ -36,11 +40,16 @@ pub struct FileResult {
   errors : Array[ValidationError]
 } derive(Eq, @debug.Debug)
 
+///|
 /// Create a `FileResult`.
-pub fn FileResult::new(name : String, errors : Array[ValidationError]) -> FileResult {
-  { name: name, errors: errors }
+pub fn FileResult::new(
+  name : String,
+  errors : Array[ValidationError],
+) -> FileResult {
+  { name, errors, }
 }
 
+///|
 /// The result of validating one schema against one or more data documents.
 pub struct RunReport {
   /// Name of the schema document.
@@ -49,11 +58,16 @@ pub struct RunReport {
   results : Array[FileResult]
 } derive(Eq, @debug.Debug)
 
+///|
 /// Create a `RunReport`.
-pub fn RunReport::new(schema : String, results : Array[FileResult]) -> RunReport {
-  { schema: schema, results: results }
+pub fn RunReport::new(
+  schema : String,
+  results : Array[FileResult],
+) -> RunReport {
+  { schema, results, }
 }
 
+///|
 /// Number of documents that failed validation.
 pub fn RunReport::failed(report : RunReport) -> Int {
   let mut count = 0
@@ -65,6 +79,7 @@ pub fn RunReport::failed(report : RunReport) -> Int {
   return count
 }
 
+///|
 /// Total number of errors across all documents.
 pub fn RunReport::total_errors(report : RunReport) -> Int {
   let mut count = 0
@@ -74,11 +89,13 @@ pub fn RunReport::total_errors(report : RunReport) -> Int {
   return count
 }
 
+///|
 /// `true` when every document is valid.
 pub fn RunReport::is_ok(report : RunReport) -> Bool {
   report.total_errors() == 0
 }
 
+///|
 /// Render the report as text.
 ///
 /// With a single data document the output is just the error lines, which is
@@ -112,6 +129,7 @@ pub fn render_text(report : RunReport, quiet : Bool) -> String {
   return join_lines(lines)
 }
 
+///|
 /// Render the report as a JSON document.
 ///
 /// Shape:
@@ -156,17 +174,23 @@ pub fn render_json(report : RunReport) -> String {
   return Json::object(root).stringify(indent=2)
 }
 
+///|
 /// Render the report in the requested format.
 ///
 /// `quiet` only affects the text format; the JSON format is already
 /// machine-oriented and always contains everything.
-pub fn render(report : RunReport, format : ReportFormat, quiet : Bool) -> String {
+pub fn render(
+  report : RunReport,
+  format : ReportFormat,
+  quiet : Bool,
+) -> String {
   match format {
     Json => render_json(report)
     Text => render_text(report, quiet)
   }
 }
 
+///|
 fn join_lines(lines : Array[String]) -> String {
   let mut out = ""
   for line in lines {

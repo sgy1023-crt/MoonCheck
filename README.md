@@ -40,6 +40,13 @@ moon test             # run the test suite
 moon run examples/demo   # run the demo (works on any backend)
 ```
 
+On a fresh machine, refresh the package registry index first if dependency
+resolution fails (`module was not found in the registry`):
+
+```bash
+moon update
+```
+
 The library part is pure MoonBit and runs on any backend. The `cmd/main` CLI
 package targets **native** builds; building the native executable needs an
 MSVC toolchain on Windows or a C toolchain on Linux/macOS:

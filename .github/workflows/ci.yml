@@ -18,6 +18,9 @@ jobs:
       - name: Toolchain version
         run: moon version
 
+      - name: Update the package registry index
+        run: moon update
+
       - name: Check formatting
         run: moon fmt --check
 

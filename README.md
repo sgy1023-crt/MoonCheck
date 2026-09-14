@@ -18,6 +18,12 @@ AI agent tool-call arguments before you trust them.
   (`$.user.age`, `$.tags[0]`), a machine-readable kind, and a human message
   such as `expected Int, got String`
 - Collects **all** errors instead of stopping at the first
+- **Built for CI**: validate many documents in one run, with a machine-readable
+  JSON report (`--report json`) and stable exit codes
+- **Schema linting**: `mooncheck check-schema schema.json` checks the schema
+  document itself, so a broken contract fails before any data is checked
+- Shell globs work as-is (`mooncheck validate s.json configs/*.json`); the CLI
+  needs no glob support and no extra dependency
 - Schemas are described as plain JSON documents, so they work across
   languages and are easy to read; they can also be built directly in MoonBit
 - No runtime dependencies beyond the MoonBit standard library
@@ -64,6 +70,19 @@ let schema = try { @MoonCheck.parse_schema_string(schema_text) } catch {
 }
 let data = try { @json.parse(data_text) } catch { _ => panic("bad json") }
 if @MoonCheck.is_valid(schema, data) { ... }
+```
+
+For batch work, parse the schema once, validate every document, and render one
+report — the same path the CLI takes:
+
+```moonbit
+let results = [
+  @MoonCheck.FileResult::new("a.json", @MoonCheck.validate_text(schema, text_a)),
+  @MoonCheck.FileResult::new("b.json", @MoonCheck.validate_text(schema, text_b)),
+]
+let report = @MoonCheck.RunReport::new("schema.json", results)
+println(@MoonCheck.render(report, @MoonCheck.ReportFormat::text(), false))
+println(@MoonCheck.render(report, @MoonCheck.ReportFormat::json(), false))
 ```
 
 ## Schema Example
@@ -122,28 +141,76 @@ $.tags: length must be at most 5, got 4
 
 ## CLI Usage
 
-The CLI validates a schema file and a data file:
+Build the executable first (see *Installation / Build*), then:
 
 ```bash
-# the leading `validate` subcommand is optional
-mooncheck validate schema.json data.json
+# one schema, one data file — valid: prints nothing, exits 0
 mooncheck validate examples/cli/schema.json examples/cli/data_valid.json
-# -> valid: data matches the schema
 
+# one schema, one data file — invalid: prints the errors, exits 1
 mooncheck validate examples/cli/schema.json examples/cli/data_invalid.json
 # -> $.action: value must be one of ["click","type","scroll"]
 #    $.x: value must be at least 0, got -5
 #    $.y: value must be at most 1080, got 5000
 ```
 
-Exit codes: `0` data is valid, `1` data is invalid (errors are printed),
-`2` usage or I/O error. `mooncheck --help` and `mooncheck --version` print
-usage and version.
+The part that is not just another validator is batch/CI mode: pass several
+documents (the shell expands the glob) and each gets its own result, with a
+summary at the end.
 
-Because file I/O and native execution require the native backend, build the
-executable as described under *Installation / Build*. The validation logic the
-CLI runs is the library's `validate_strings`, covered by the test suite on
-every backend.
+```bash
+mooncheck validate examples/cli/config.schema.json examples/cli/configs/*.json
+```
+
+```
+ok: service_a.json
+ok: service_b.json
+service_c_broken.json: $.host: length must be at least 1, got 0
+service_c_broken.json: $.port: value must be at most 65535, got 70000
+service_c_broken.json: $.timeout: expected Int, got String
+checked 3 document(s): 2 ok, 1 failed, 3 error(s)
+```
+
+Add `--report json` for a machine-readable report that a CI job or a script can
+consume directly:
+
+```json
+{
+  "schema": "examples/cli/config.schema.json",
+  "ok": false,
+  "summary": { "checked": 3, "failed": 1, "errors": 3 },
+  "documents": [
+    { "path": "service_a.json", "ok": true, "errors": [] },
+    { "path": "service_b.json", "ok": true, "errors": [] },
+    {
+      "path": "service_c_broken.json",
+      "ok": false,
+      "errors": [
+        { "path": "$.host", "kind": "too_short", "message": "length must be at least 1, got 0" },
+        { "path": "$.port", "kind": "above_max", "message": "value must be at most 65535, got 70000" },
+        { "path": "$.timeout", "kind": "type_mismatch", "message": "expected Int, got String" }
+      ]
+    }
+  ]
+}
+```
+
+Other commands:
+
+```bash
+mooncheck check-schema schema.json   # lint a schema document on its own
+mooncheck --help                     # usage
+mooncheck --version                  # version
+mooncheck validate s.json d.json -q  # only report failures
+```
+
+Exit codes: `0` every document is valid, `1` at least one document is invalid,
+`2` usage, I/O or schema error.
+
+The executable is a thin I/O shell: argument parsing, batch orchestration and
+report rendering live in `cli.mbt` and `report.mbt` in the library, so they are
+covered by the test suite on every backend. Only file reading and the process
+exit status live in `cmd/main`.
 
 ## Use Cases
 
@@ -158,6 +225,35 @@ every backend.
 The same core also serves: test-data sanity checks, mocked-API fixtures,
 and any place a JSON payload must be trusted before it is used.
 
+## Ecosystem and Scope
+
+MoonBit already has JSON validation libraries, and this project does not try to
+replace them. Where MoonCheck sits:
+
+| Project | Focus | Interface |
+|---|---|---|
+| [Betterlol/moon_zod](https://github.com/Betterlol/moon_zod) | Zod/Pydantic-style runtime schemas for LLM tool calling: many kinds, combinators, strip/strict modes, JSON Schema export, prompt and struct-code generation | MoonBit code API; CLI that infers a schema from a sample |
+| [mizchi/jsonschema](https://github.com/mizchi/moonbit_jsonschema) | JSON Schema (subset) validation plus MoonBit code generation | MoonBit code API |
+| [YumeCross/schema](https://github.com/YumeCross/schema) | Lightweight JSON Schema validation | MoonBit code API |
+| **MoonCheck** | A **schema-document-driven** validator for checks and automation: a small fixed schema language, all-error collection with precise paths, and a **batch/CI CLI** | JSON schema documents + MoonBit library + CLI |
+
+**What this project deliberately does not do**: full JSON Schema Draft
+compatibility (`$ref`, `anyOf`/`oneOf`, `pattern`, …), data transformation,
+schema-to-code generation, prompt generation, or builder-style schema
+combinators. Those are already covered by the projects above, and re-implementing
+them would add surface without adding value.
+
+**What it does instead**: schemas are plain JSON files that any language, tool
+or pipeline can read and share; the CLI validates *many* documents in one run
+and can emit either human-readable lines or a stable JSON report with documented
+exit codes — the shape a CI job needs. The library has no dependencies beyond
+the MoonBit standard library, and the implementation is small enough to read in
+one sitting.
+
+In short: for rich in-code schemas or LLM-oriented features, use moon_zod. For a
+schema file that your CI, scripts and other languages can share, that is what
+MoonCheck is for.
+
 ## Testing
 
 ```bash
@@ -171,23 +267,31 @@ nested objects, and array element types (with paths such as `$.tags[0]`).
 Schema-document parsing (valid and malformed) and end-to-end
 `validate_strings` calls are also covered.
 
+Command line parsing, the batch flow and both report renderings are tested as
+well, which is why they live in the library rather than in the executable:
+**69 tests, all green on the default backend.**
+
 ## Project Structure
 
 ```
 MoonCheck/
 ├── moon.mod                 # module metadata
-├── moon.pkg                 # root library package
+├── moon.pkg                 # root library package (no dependencies)
 ├── schema.mbt               # schema type model (Type, specs, props)
 ├── schema_json.mbt          # parse schema documents from JSON
-├── validate.mbt             # the validation engine + validate_strings
+├── validate.mbt             # validation engine, validate_strings/validate_text
 ├── error.mbt                # structured ValidationError / ErrorKind
+├── report.mbt               # text and JSON reports
+├── cli.mbt                  # command line parsing + usage text
 ├── MoonCheck_test.mbt       # black-box tests (public API)
-├── MoonCheck_wbtest.mbt     # white-box tests (internals)
+├── MoonCheck_wbtest.mbt     # white-box tests (engine internals)
+├── cli_wbtest.mbt           # white-box tests (CLI parsing + end-to-end flow)
+├── report_wbtest.mbt        # white-box tests (report rendering)
 ├── cmd/
-│   └── main/                # CLI (native target)
+│   └── main/                # CLI shell: reads files, prints, sets exit status
 └── examples/
     ├── demo/                # runnable demo (moon run examples/demo)
-    └── cli/                 # sample schema + data files for the CLI
+    └── cli/                 # sample schemas + data (configs/ for batch runs)
 ```
 
 ## License

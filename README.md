@@ -1,6 +1,7 @@
 # MoonCheck
 
 [![CI](https://github.com/sgy1023-crt/MoonCheck/actions/workflows/ci.yml/badge.svg)](https://github.com/sgy1023-crt/MoonCheck/actions/workflows/ci.yml)
+[![mooncakes](https://img.shields.io/badge/mooncakes-sgy1023--crt%2FMoonCheck-blue)](https://mooncakes.io/docs/sgy1023-crt/MoonCheck)
 
 A lightweight, reusable JSON / API parameter validator with a CLI, written in MoonBit.
 
@@ -33,6 +34,14 @@ AI agent tool-call arguments before you trust them.
 ## Installation / Build
 
 Requires the [MoonBit toolchain](https://www.moonbitlang.com/download/).
+
+Add the library to a project:
+
+```bash
+moon add sgy1023-crt/MoonCheck
+```
+
+Then, from a checkout of this repository:
 
 ```bash
 moon check            # type-check the library and all packages

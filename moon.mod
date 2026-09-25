@@ -11,7 +11,7 @@
 
 name = "sgy1023-crt/MoonCheck"
 
-version = "0.1.0"
+version = "0.2.0"
 
 readme = "README.md"
 
@@ -19,12 +19,13 @@ repository = "https://github.com/sgy1023-crt/MoonCheck"
 
 license = "Apache-2.0"
 
-keywords = [ "json", "validation", "schema", "cli" ]
+keywords = [ "json", "jsonschema", "validation", "cli", "ci" ]
 
 preferred_target = "wasm"
 
-description = "A lightweight, reusable JSON / API parameter validator with a CLI, written in MoonBit."
+description = "Batch / CI JSON Schema validation CLI with schema linting and JSON reports, built on mizchi/jsonschema."
 
 import {
   "moonbitlang/async@0.21.3",
+  "mizchi/jsonschema@0.8.1",
 }

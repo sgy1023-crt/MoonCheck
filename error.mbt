@@ -1,5 +1,8 @@
 // Structured validation errors produced by MoonCheck.
 //
+// These are a stable, flat view over the errors of `mizchi/jsonschema`, so the
+// reports and exit codes do not depend on its internal error shape.
+//
 // Validation collects *all* problems it finds instead of stopping at the first
 // one. Every error carries:
 //   - the JSON pointer-like path of the offending value (e.g. `$.user.age`)
@@ -13,18 +16,19 @@ pub enum ErrorKind {
   MissingRequired
   /// The value has the wrong JSON type.
   Type
-  /// A number is smaller than its `min`.
+  /// A number is smaller than its `minimum` / `exclusiveMinimum`.
   BelowMinimum
-  /// A number is larger than its `max`.
+  /// A number is larger than its `maximum` / `exclusiveMaximum`.
   AboveMaximum
-  /// A string / array is shorter than its `min_length`.
+  /// A string / array is shorter than its `minLength` / `minItems`.
   TooShort
-  /// A string / array is longer than its `max_length`.
+  /// A string / array is longer than its `maxLength` / `maxItems`.
   TooLong
   /// The value is not one of the allowed `enum` values.
   NotInEnum
-  /// A number is not finite (`NaN`, `infinity`).
-  InvalidNumber
+  /// Any other JSON Schema keyword failed (`const`, `anyOf`,
+  /// `additionalProperties`, ...).
+  Constraint
   /// The data document could not be parsed as JSON at all. Used by batch and
   /// file-oriented callers so one bad document does not abort the whole run.
   InvalidJson
@@ -37,12 +41,12 @@ pub struct ValidationError {
   path : String
   /// Machine-readable classification.
   kind : ErrorKind
-  /// Human-readable description, e.g. `expected Int, got String`.
+  /// Human-readable description, e.g. `Value is not a string`.
   message : String
 } derive(Eq, @debug.Debug)
 
 ///|
-/// Render one error as a single line: `$.user.age: expected Int, got String`.
+/// Render one error as a single line: `$.user.age: Value is not a number`.
 pub fn to_string(error : ValidationError) -> String {
   "\{error.path}: \{error.message}"
 }
@@ -61,7 +65,7 @@ pub fn error_kind_name(kind : ErrorKind) -> String {
     TooShort => "too_short"
     TooLong => "too_long"
     NotInEnum => "not_in_enum"
-    InvalidNumber => "invalid_number"
+    Constraint => "constraint"
     InvalidJson => "invalid_json"
   }
 }

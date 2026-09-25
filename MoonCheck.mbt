@@ -1,14 +1,17 @@
 // MoonCheck
 //
-// A lightweight, reusable JSON / API parameter validator written in MoonBit.
+// A batch / CI front end for JSON Schema validation in MoonBit.
 //
-// The library exposes a small schema description language and validates JSON
-// values against it, returning structured, human-readable errors.
+// Schema validation itself is delegated to `mizchi/jsonschema`
+// (https://mooncakes.io/docs/mizchi/jsonschema). MoonCheck extends it with the
+// pieces needed to run validation over many documents in CI:
 //
-// Public API surface lives in the following files:
-//   - schema.mbt      : the schema type model
-//   - validate.mbt    : the validation engine and one-shot validate_strings
-//   - error.mbt       : structured validation errors
-//   - schema_json.mbt : parse a schema from a JSON document
+//   - schema.mbt   : a schema linter that rejects schemas the validator would
+//                    otherwise silently accept as "anything goes"
+//   - validate.mbt : adapter over `mizchi/jsonschema`, turning its errors into
+//                    stable, flat, classified errors with `$.a[0]` paths
+//   - error.mbt    : the stable error model used by the reports
+//   - report.mbt   : text and JSON reports for many documents
+//   - cli.mbt      : the `mooncheck` command line contract
 //
 // See README.md for usage.

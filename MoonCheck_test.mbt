@@ -1,33 +1,27 @@
 // Black-box tests: exercise MoonCheck through its public API only, the way a
-// consumer (or the CLI) would use it. Schemas come from JSON documents, data
-// is parsed from JSON text, and results are read back as values.
-
-///|
-fn ok_errors(errors : Array[@MoonCheck.ValidationError]) -> Bool {
-  errors.is_empty()
-}
+// consumer (or the CLI) would use it. Schemas are standard JSON Schema
+// documents validated by `mizchi/jsonschema`; data is parsed from JSON text.
 
 ///|
 test "end to end: valid payload" {
-  let schema_text = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\",\"required\":true,\"minLength\":1},\"age\":{\"type\":\"int\",\"required\":false,\"min\":0,\"max\":150}}}"
+  let schema_text = "{\"type\":\"object\",\"required\":[\"name\"],\"properties\":{\"name\":{\"type\":\"string\",\"minLength\":1},\"age\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":150}}}"
   let data_text = "{\"name\":\"alice\",\"age\":30}"
   match @MoonCheck.validate_strings(schema_text, data_text) {
-    Ok(errors) => assert_true(ok_errors(errors))
+    Ok(errors) => assert_true(errors.is_empty())
     Err(reason) => fail(reason)
   }
 }
 
 ///|
 test "end to end: invalid payload reports all problems" {
-  let schema_text = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\",\"required\":true,\"minLength\":5},\"age\":{\"type\":\"int\",\"required\":true,\"max\":150}}}"
+  let schema_text = "{\"type\":\"object\",\"required\":[\"name\",\"age\"],\"properties\":{\"name\":{\"type\":\"string\",\"minLength\":5},\"age\":{\"type\":\"integer\",\"maximum\":150}}}"
   let data_text = "{\"name\":\"a\",\"age\":\"old\"}"
   match @MoonCheck.validate_strings(schema_text, data_text) {
     Ok(errors) => {
       assert_eq(errors.length(), 2)
-      assert_eq(errors[0].path, "$.name")
-      assert_eq(errors[0].message, "length must be at least 5, got 1")
-      assert_eq(errors[1].path, "$.age")
-      assert_eq(errors[1].message, "expected Int, got String")
+      let by_path = errors.map(e => (e.path, @MoonCheck.error_kind_name(e.kind)))
+      assert_true(by_path.contains(("$.name", "too_short")))
+      assert_true(by_path.contains(("$.age", "type_mismatch")))
     }
     Err(reason) => fail(reason)
   }
@@ -35,8 +29,7 @@ test "end to end: invalid payload reports all problems" {
 
 ///|
 test "end to end: malformed data text is an error" {
-  let schema_text = "{\"type\":\"string\"}"
-  match @MoonCheck.validate_strings(schema_text, "not json") {
+  match @MoonCheck.validate_strings("{\"type\":\"string\"}", "not json") {
     Err(_) => ()
     Ok(_) => fail("expected an error for malformed data")
   }
@@ -53,22 +46,23 @@ test "end to end: malformed schema text is an error" {
 ///|
 test "parse schema then validate a value" {
   let schema = @MoonCheck.parse_schema_string(
-    "{\"type\":\"int\",\"min\":0,\"max\":100}",
+    "{\"type\":\"integer\",\"minimum\":0,\"maximum\":100}",
   ) catch {
     _ => fail("schema should parse")
   }
-  let value : Json = 42
-  assert_true(@MoonCheck.is_valid(schema, value))
+  assert_true(@MoonCheck.is_valid(schema, 42))
   let errors = @MoonCheck.validate(schema, 101)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].path, "$")
-  assert_eq(errors[0].message, "value must be at most 100, got 101")
+  assert_eq(@MoonCheck.error_kind_name(errors[0].kind), "above_max")
 }
 
 ///|
-test "schema parser rejects unknown type" {
+test "linter rejects a schema the validator would treat as 'anything'" {
+  // `mizchi/jsonschema` alone would compile `"type": "int"` to an accept-all
+  // schema; MoonCheck refuses it.
   let caught = try {
-    let _ = @MoonCheck.parse_schema_string("{\"type\":\"nope\"}")
+    let _ = @MoonCheck.parse_schema_string("{\"type\":\"int\"}")
     false
   } catch {
     _ => true
@@ -78,7 +72,7 @@ test "schema parser rejects unknown type" {
 
 ///|
 test "batch report API is usable from another package" {
-  let schema = match @MoonCheck.parse_schema_text("{\"type\":\"int\"}") {
+  let schema = match @MoonCheck.parse_schema_text("{\"type\":\"integer\"}") {
     Ok(schema) => schema
     Err(reason) => fail(reason)
   }
@@ -100,5 +94,5 @@ test "batch report API is usable from another package" {
   )
   assert_true(json_text.contains("\"failed\": 1"))
   let text = @MoonCheck.render(report, @MoonCheck.ReportFormat::text(), true)
-  assert_eq(text, "bad.json: $: expected Int, got String")
+  assert_eq(text, "bad.json: $: Value is not a number")
 }

@@ -112,7 +112,7 @@ pub fn parse_args(argv : ArrayView[String]) -> CliCommand {
 /// Usage text, printed by `--help` and after a usage error.
 pub fn usage_text() -> String {
   let text =
-    #|MoonCheck - validate JSON documents against a lightweight schema
+    #|MoonCheck - validate JSON documents against a JSON Schema in CI
     #|
     #|Usage:
     #|  mooncheck validate <schema.json> <data.json> [more.json ...]
@@ -138,5 +138,5 @@ pub fn usage_text() -> String {
 ///|
 /// Version text, printed by `--version`.
 pub fn version_text() -> String {
-  return "mooncheck 0.1.0"
+  return "mooncheck 0.2.0"
 }

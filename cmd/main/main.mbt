@@ -12,7 +12,7 @@ async fn main {
     @lib.CliCommand::Version => println(@lib.version_text())
     @lib.CliCommand::Invalid(msg) => {
       println(@lib.usage_text())
-      @abort.abort("error: \{msg}")
+      stop(2, "error: \{msg}")
     }
     @lib.CliCommand::CheckSchema(opts) => check_schema(opts.path)
     @lib.CliCommand::Validate(opts) => validate_all(opts)
@@ -22,25 +22,25 @@ async fn main {
 ///|
 /// Report whether a schema document is well formed.
 async fn check_schema(path : String) -> Unit {
-  let text = read_or_abort(path)
+  let text = read_or_stop(path)
   match @lib.parse_schema_text(text) {
     Ok(_) => println("schema is valid: \{path}")
-    Err(reason) => @abort.abort("error: invalid schema \"\{path}\": \{reason}")
+    Err(reason) => stop(2, "error: invalid schema \"\{path}\": \{reason}")
   }
 }
 
 ///|
 /// Validate every data document against one schema and report as a whole.
 async fn validate_all(opts : @lib.ValidateOptions) -> Unit {
-  let schema_text = read_or_abort(opts.schema)
+  let schema_text = read_or_stop(opts.schema)
   let schema = match @lib.parse_schema_text(schema_text) {
     Ok(schema) => schema
     Err(reason) =>
-      @abort.abort("error: invalid schema \"\{opts.schema}\": \{reason}")
+      stop(2, "error: invalid schema \"\{opts.schema}\": \{reason}")
   }
   let results : Array[@lib.FileResult] = []
   for path in opts.data {
-    let text = read_or_abort(path)
+    let text = read_or_stop(path)
     results.push(@lib.FileResult::new(path, @lib.validate_text(schema, text)))
   }
   let report = @lib.RunReport::new(opts.schema, results)
@@ -49,7 +49,8 @@ async fn validate_all(opts : @lib.ValidateOptions) -> Unit {
     println(rendered)
   }
   if !report.is_ok() {
-    @abort.abort(
+    stop(
+      1,
       "error: \{report.failed()} of \{report.results.length()} document(s) failed validation",
     )
   }
@@ -57,12 +58,24 @@ async fn validate_all(opts : @lib.ValidateOptions) -> Unit {
 
 ///|
 /// Read a file as text, or stop with a clear message.
-async fn read_or_abort(path : String) -> String {
+async fn read_or_stop(path : String) -> String {
   let data = @fs.read_file(path) catch {
-    err => @abort.abort("error: cannot read \"\{path}\": \{err}")
+    err => stop(2, "error: cannot read \"\{path}\": \{err}")
   }
   let text = data.text() catch {
-    err => @abort.abort("error: cannot decode \"\{path}\" as text: \{err}")
+    err => stop(2, "error: cannot decode \"\{path}\" as text: \{err}")
   }
   return text
 }
+
+///|
+/// Print `message` and exit with `code` (1: invalid data, 2: usage, I/O or
+/// schema error), without a panic backtrace.
+fn[T] stop(code : Int, message : String) -> T {
+  println(message)
+  c_exit(code)
+  panic()
+}
+
+///|
+extern "C" fn c_exit(code : Int) = "exit"

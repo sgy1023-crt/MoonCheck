@@ -3,194 +3,84 @@
 [![CI](https://github.com/sgy1023-crt/MoonCheck/actions/workflows/ci.yml/badge.svg)](https://github.com/sgy1023-crt/MoonCheck/actions/workflows/ci.yml)
 [![mooncakes](https://img.shields.io/badge/mooncakes-sgy1023--crt%2FMoonCheck-blue)](https://mooncakes.io/docs/sgy1023-crt/MoonCheck)
 
-A lightweight, reusable JSON / API parameter validator with a CLI, written in MoonBit.
+**A batch / CI command line front end for JSON Schema validation in MoonBit,
+built on [mizchi/jsonschema](https://github.com/mizchi/moonbit_jsonschema).**
 
-MoonCheck validates JSON data against a small, hand-written schema and reports
-**all** problems it finds as clear, human-readable errors. It is a general
-purpose developer tool: validate REST API request bodies, JSON config files, or
-AI agent tool-call arguments before you trust them.
+> **Attribution.** MoonCheck does **not** implement a JSON Schema validator.
+> All schema compilation and data validation is done by
+> [`mizchi/jsonschema`](https://mooncakes.io/docs/mizchi/jsonschema) (MIT),
+> declared as a dependency in `moon.mod`. MoonCheck is an extension on top of
+> it that adds what you need to run schema checks over many files in CI.
+> Versions up to 0.1.0 shipped their own small validation engine; from 0.2.0
+> that engine was removed and replaced by `mizchi/jsonschema`.
 
-## Features
+## What MoonCheck adds on top of mizchi/jsonschema
 
-- Small schema language with the kinds you actually use:
-  `string`, `number`, `int`, `bool`, `object`, `array`
-- Constraints: `required`, `enum`, numeric `min`/`max`,
-  `minLength`/`maxLength` for strings, `minItems`/`maxItems` for arrays,
-  `items` for array element types, and arbitrarily **nested objects**
-- Structured errors: every error carries a JSON-pointer-like **path**
-  (`$.user.age`, `$.tags[0]`), a machine-readable kind, and a human message
-  such as `expected Int, got String`
-- Collects **all** errors instead of stopping at the first
-- **Built for CI**: validate many documents in one run, with a machine-readable
-  JSON report (`--report json`) and stable exit codes
-- **Schema linting**: `mooncheck check-schema schema.json` checks the schema
-  document itself, so a broken contract fails before any data is checked
-- Shell globs work as-is (`mooncheck validate s.json configs/*.json`); the CLI
-  needs no glob support and no extra dependency
-- Schemas are described as plain JSON documents, so they work across
-  languages and are easy to read; they can also be built directly in MoonBit
-- No runtime dependencies beyond the MoonBit standard library
+| | mizchi/jsonschema | MoonCheck adds |
+|---|---|---|
+| Validate a value against a JSON Schema | ✅ (the engine) | uses it as is |
+| Command line tool | – | `mooncheck validate schema.json data/*.json` |
+| Many documents in one run, one bad file does not stop the run | – | ✅ |
+| Machine-readable report for CI | – | `--report json`, stable error kinds |
+| Stable exit codes | – | `0` valid / `1` invalid data / `2` usage, I/O or schema error |
+| Schema linting | lenient: unknown nodes become "accept anything" | `check-schema` rejects typos such as `"type": "int"`, `"min"`, `"required": true` with a location and a hint |
+| Error format | `JsonPointer` + message tree | flat errors with `$.user.tags[0]` paths and a `kind` (`missing_required`, `type_mismatch`, `above_max`, …) |
+
+The schema linter matters in CI: a schema with a typo would otherwise compile
+to an accept-all validator, and every document would silently pass.
 
 ## Installation / Build
 
 Requires the [MoonBit toolchain](https://www.moonbitlang.com/download/).
 
-Add the library to a project:
-
 ```bash
-moon add sgy1023-crt/MoonCheck
+moon update                        # refresh the registry index
+moon check                         # type-check
+moon test                          # run the test suite
+moon run examples/demo             # run the demo (any backend)
+moon build cmd/main --target native   # build the `mooncheck` executable
 ```
 
-Then, from a checkout of this repository:
+The library runs on any backend. The `cmd/main` CLI targets **native** builds
+(MSVC on Windows, a C toolchain on Linux/macOS).
 
-```bash
-moon check            # type-check the library and all packages
-moon test             # run the test suite
-moon run examples/demo   # run the demo (works on any backend)
-```
+## CLI Usage
 
-On a fresh machine, refresh the package registry index first if dependency
-resolution fails (`module was not found in the registry`):
-
-```bash
-moon update
-```
-
-The library part is pure MoonBit and runs on any backend. The `cmd/main` CLI
-package targets **native** builds; building the native executable needs an
-MSVC toolchain on Windows or a C toolchain on Linux/macOS:
-
-```bash
-# Windows (MSVC) or Linux/macOS
-moon build cmd/main --target native
-```
-
-## Quick Start
-
-Validate data from a schema document and a JSON string in one call:
-
-```moonbit
-match @MoonCheck.validate_strings(schema_text, data_text) {
-  Ok(errors) if errors.is_empty() => println("valid")
-  Ok(errors) =>
-    for error in errors {
-      println(@MoonCheck.to_string(error))
-    }
-  Err(reason) => println("could not validate: \{reason}")
-}
-```
-
-Or parse a schema once and reuse it against parsed JSON values:
-
-```moonbit
-let schema = try { @MoonCheck.parse_schema_string(schema_text) } catch {
-  _ => panic("bad schema")
-}
-let data = try { @json.parse(data_text) } catch { _ => panic("bad json") }
-if @MoonCheck.is_valid(schema, data) { ... }
-```
-
-For batch work, parse the schema once, validate every document, and render one
-report — the same path the CLI takes:
-
-```moonbit
-let results = [
-  @MoonCheck.FileResult::new("a.json", @MoonCheck.validate_text(schema, text_a)),
-  @MoonCheck.FileResult::new("b.json", @MoonCheck.validate_text(schema, text_b)),
-]
-let report = @MoonCheck.RunReport::new("schema.json", results)
-println(@MoonCheck.render(report, @MoonCheck.ReportFormat::text(), false))
-println(@MoonCheck.render(report, @MoonCheck.ReportFormat::json(), false))
-```
-
-## Schema Example
-
-Schemas are JSON documents. This one describes a small user object:
+Schemas are standard JSON Schema documents:
 
 ```json
 {
   "type": "object",
+  "required": ["host", "port"],
   "properties": {
-    "name": { "type": "string", "required": true, "minLength": 1, "maxLength": 30 },
-    "age":  { "type": "int", "required": true, "min": 0, "max": 150 },
-    "role": { "type": "string", "required": false, "enum": ["admin", "user"] },
-    "tags": { "type": "array", "required": false, "maxItems": 5, "items": { "type": "string" } }
+    "host":    { "type": "string", "minLength": 1 },
+    "port":    { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "debug":   { "type": "boolean" },
+    "timeout": { "type": "integer", "minimum": 0, "maximum": 600 }
   }
 }
 ```
 
-Supported `type` values: `string`, `number`, `int`, `bool`, `object`, `array`.
-
-Supported keys:
-
-| Key         | Applies to | Meaning                                    |
-|-------------|------------|--------------------------------------------|
-| `type`      | all        | The schema kind (required)                 |
-| `required`  | property   | Property must be present (`true`)          |
-| `enum`      | property   | Value must equal one of the listed literals|
-| `min`/`max` | `int`, `number` | Inclusive numeric bounds               |
-| `minLength`/`maxLength` | `string` | Character count bounds          |
-| `minItems`/`maxItems` | `array` | Element count bounds              |
-| `items`     | `array`    | Schema applied to every element (required) |
-| `properties`| `object`   | Map of property name → property schema     |
-
-Objects with `type: "object"` validate the declared `properties`; undeclared
-fields are ignored. Properties are optional unless `required: true`.
-
-## Validation Example
-
-Given the schema above and this data:
-
-```json
-{ "name": "", "age": 200, "role": "owner", "tags": ["a", "b"] }
-```
-
-`validate_strings` returns four errors, printed one per line:
-
-```
-$.name: length must be at least 1, got 0
-$.age: value must be at most 150, got 200
-$.role: value must be one of ["admin","user"]
-$.tags: length must be at most 5, got 4
-```
-
-`$.tags[0]` would be the path of an invalid array element, and
-`$.user.email` the path of a field inside a nested object.
-
-## CLI Usage
-
-Build the executable first (see *Installation / Build*), then:
-
-```bash
-# one schema, one data file — valid: prints nothing, exits 0
-mooncheck validate examples/cli/schema.json examples/cli/data_valid.json
-
-# one schema, one data file — invalid: prints the errors, exits 1
-mooncheck validate examples/cli/schema.json examples/cli/data_invalid.json
-# -> $.action: value must be one of ["click","type","scroll"]
-#    $.x: value must be at least 0, got -5
-#    $.y: value must be at most 1080, got 5000
-```
-
-The part that is not just another validator is batch/CI mode: pass several
-documents (the shell expands the glob) and each gets its own result, with a
-summary at the end.
+Validate many documents at once (the shell expands the glob):
 
 ```bash
 mooncheck validate examples/cli/config.schema.json examples/cli/configs/*.json
 ```
 
 ```
-ok: service_a.json
-ok: service_b.json
-service_c_broken.json: $.host: length must be at least 1, got 0
-service_c_broken.json: $.port: value must be at most 65535, got 70000
-service_c_broken.json: $.timeout: expected Int, got String
+ok: examples/cli/configs/service_a.json
+ok: examples/cli/configs/service_b.json
+examples/cli/configs/service_c_broken.json: $.host: String length 0 is less than minimum 1
+examples/cli/configs/service_c_broken.json: $.port: Value is greater than maximum 65535
+examples/cli/configs/service_c_broken.json: $.timeout: Value is not a number
 checked 3 document(s): 2 ok, 1 failed, 3 error(s)
+error: 1 of 3 document(s) failed validation
 ```
 
-Add `--report json` for a machine-readable report that a CI job or a script can
-consume directly:
+The messages come from `mizchi/jsonschema`; the paths, grouping, summary and
+exit code come from MoonCheck.
+
+Add `--report json` for a report a CI job or script can consume:
 
 ```json
 {
@@ -198,79 +88,85 @@ consume directly:
   "ok": false,
   "summary": { "checked": 3, "failed": 1, "errors": 3 },
   "documents": [
-    { "path": "service_a.json", "ok": true, "errors": [] },
-    { "path": "service_b.json", "ok": true, "errors": [] },
+    { "path": "examples/cli/configs/service_a.json", "ok": true, "errors": [] },
+    { "path": "examples/cli/configs/service_b.json", "ok": true, "errors": [] },
     {
-      "path": "service_c_broken.json",
+      "path": "examples/cli/configs/service_c_broken.json",
       "ok": false,
       "errors": [
-        { "path": "$.host", "kind": "too_short", "message": "length must be at least 1, got 0" },
-        { "path": "$.port", "kind": "above_max", "message": "value must be at most 65535, got 70000" },
-        { "path": "$.timeout", "kind": "type_mismatch", "message": "expected Int, got String" }
+        { "path": "$.host", "kind": "too_short", "message": "String length 0 is less than minimum 1" },
+        { "path": "$.port", "kind": "above_max", "message": "Value is greater than maximum 65535" },
+        { "path": "$.timeout", "kind": "type_mismatch", "message": "Value is not a number" }
       ]
     }
   ]
 }
 ```
 
-Other commands:
+Lint a schema before using it:
 
 ```bash
-mooncheck check-schema schema.json   # lint a schema document on its own
-mooncheck --help                     # usage
-mooncheck --version                  # version
-mooncheck validate s.json d.json -q  # only report failures
+mooncheck check-schema bad.schema.json
 ```
+
+```
+error: invalid schema "bad.schema.json": #/required: must be an array of property names, e.g. ["name"]; #/properties/age/type: unknown type "int" (did you mean "integer"?); #/properties/age: unknown keyword "min" (did you mean "minimum"?)
+```
+
+Other options: `-q/--quiet` (only failures), `-h/--help`, `-V/--version`.
 
 Exit codes: `0` every document is valid, `1` at least one document is invalid,
 `2` usage, I/O or schema error.
 
-The executable is a thin I/O shell: argument parsing, batch orchestration and
-report rendering live in `cli.mbt` and `report.mbt` in the library, so they are
-covered by the test suite on every backend. Only file reading and the process
-exit status live in `cmd/main`.
+### Error kinds
 
-## Use Cases
+| kind | produced by |
+|---|---|
+| `missing_required` | `required` |
+| `type_mismatch` | `type` |
+| `below_min` / `above_max` | `minimum`, `exclusiveMinimum` / `maximum`, `exclusiveMaximum` |
+| `too_short` / `too_long` | `minLength`, `minItems` / `maxLength`, `maxItems` |
+| `not_in_enum` | `enum` |
+| `constraint` | any other keyword (`const`, `anyOf`, `additionalProperties`, …) |
+| `invalid_json` | the data file is not JSON |
 
-- **REST API request validation** — check `username`, `age`, `email` and
-  friends on an incoming request before handing the payload to handlers.
-- **Configuration file validation** — a tool reads a JSON config; MoonCheck
-  verifies required keys, types, and ranges before the tool trusts it.
-- **AI Agent / LLM tool-call validation** — a model emits a tool call such as
-  `{ "action": "click", "x": 123, "y": 456 }`; validate fields, types, and
-  ranges before dispatching to the executor.
+## Library Usage
 
-The same core also serves: test-data sanity checks, mocked-API fixtures,
-and any place a JSON payload must be trusted before it is used.
+```moonbit
+match @MoonCheck.validate_strings(schema_text, data_text) {
+  Ok(errors) if errors.is_empty() => println("valid")
+  Ok(errors) => for error in errors { println(@MoonCheck.to_string(error)) }
+  Err(reason) => println("could not validate: \{reason}")
+}
+```
 
-## Ecosystem and Scope
+Batch reports, the same path the CLI takes:
 
-MoonBit already has JSON validation libraries, and this project does not try to
-replace them. Where MoonCheck sits:
+```moonbit
+let schema = match @MoonCheck.parse_schema_text(schema_text) {
+  Ok(schema) => schema
+  Err(reason) => panic()
+}
+let report = @MoonCheck.RunReport::new("schema.json", [
+  @MoonCheck.FileResult::new("a.json", @MoonCheck.validate_text(schema, text_a)),
+  @MoonCheck.FileResult::new("b.json", @MoonCheck.validate_text(schema, text_b)),
+])
+println(@MoonCheck.render(report, @MoonCheck.ReportFormat::json(), false))
+```
 
-| Project | Focus | Interface |
-|---|---|---|
-| [Betterlol/moon_zod](https://github.com/Betterlol/moon_zod) | Zod/Pydantic-style runtime schemas for LLM tool calling: many kinds, combinators, strip/strict modes, JSON Schema export, prompt and struct-code generation | MoonBit code API; CLI that infers a schema from a sample |
-| [mizchi/jsonschema](https://github.com/mizchi/moonbit_jsonschema) | JSON Schema (subset) validation plus MoonBit code generation | MoonBit code API |
-| [YumeCross/schema](https://github.com/YumeCross/schema) | Lightweight JSON Schema validation | MoonBit code API |
-| **MoonCheck** | A **schema-document-driven** validator for checks and automation: a small fixed schema language, all-error collection with precise paths, and a **batch/CI CLI** | JSON schema documents + MoonBit library + CLI |
+`@MoonCheck.lint_schema(json)` returns the linter's findings as a list.
 
-**What this project deliberately does not do**: full JSON Schema Draft
-compatibility (`$ref`, `anyOf`/`oneOf`, `pattern`, …), data transformation,
-schema-to-code generation, prompt generation, or builder-style schema
-combinators. Those are already covered by the projects above, and re-implementing
-them would add surface without adding value.
+## Scope
 
-**What it does instead**: schemas are plain JSON files that any language, tool
-or pipeline can read and share; the CLI validates *many* documents in one run
-and can emit either human-readable lines or a stable JSON report with documented
-exit codes — the shape a CI job needs. The library has no dependencies beyond
-the MoonBit standard library, and the implementation is small enough to read in
-one sitting.
+Which JSON Schema keywords are supported is decided by `mizchi/jsonschema`;
+MoonCheck does not re-implement or extend the validation rules. The linter
+rejects `"type": [..]` unions (use `anyOf`) because the underlying validator
+would ignore them.
 
-In short: for rich in-code schemas or LLM-oriented features, use moon_zod. For a
-schema file that your CI, scripts and other languages can share, that is what
-MoonCheck is for.
+Related MoonBit projects: [mizchi/jsonschema](https://github.com/mizchi/moonbit_jsonschema)
+(the engine MoonCheck builds on) and [Betterlol/moon_zod](https://github.com/Betterlol/moon_zod)
+(Zod-style in-code schemas for LLM tool calling). MoonCheck does not compete
+with either: it is a CLI/CI layer, not a validator.
 
 ## Testing
 
@@ -278,35 +174,21 @@ MoonCheck is for.
 moon test
 ```
 
-The suite covers, for every kind, the normal path and each failure path:
-valid strings / ints / bools / objects / arrays, required-field presence,
-type mismatches, `min`/`max` bounds, string lengths, `enum` membership,
-nested objects, and array element types (with paths such as `$.tags[0]`).
-Schema-document parsing (valid and malformed) and end-to-end
-`validate_strings` calls are also covered.
-
-Command line parsing, the batch flow and both report renderings are tested as
-well, which is why they live in the library rather than in the executable:
-**69 tests, all green on the default backend.**
+41 tests: the schema linter, the error adapter (paths and kinds for every
+keyword), CLI argument parsing, the batch flow and both report formats.
 
 ## Project Structure
 
 ```
 MoonCheck/
-├── moon.mod                 # module metadata
-├── moon.pkg                 # root library package (no dependencies)
-├── schema.mbt               # schema type model (Type, specs, props)
-├── schema_json.mbt          # parse schema documents from JSON
-├── validate.mbt             # validation engine, validate_strings/validate_text
-├── error.mbt                # structured ValidationError / ErrorKind
+├── moon.mod                 # module metadata, depends on mizchi/jsonschema
+├── schema.mbt               # schema linter + compile via mizchi/jsonschema
+├── validate.mbt             # adapter: mizchi/jsonschema errors -> MoonCheck errors
+├── error.mbt                # stable ValidationError / ErrorKind
 ├── report.mbt               # text and JSON reports
 ├── cli.mbt                  # command line parsing + usage text
-├── MoonCheck_test.mbt       # black-box tests (public API)
-├── MoonCheck_wbtest.mbt     # white-box tests (engine internals)
-├── cli_wbtest.mbt           # white-box tests (CLI parsing + end-to-end flow)
-├── report_wbtest.mbt        # white-box tests (report rendering)
-├── cmd/
-│   └── main/                # CLI shell: reads files, prints, sets exit status
+├── *_test.mbt, *_wbtest.mbt # tests
+├── cmd/main/                # CLI shell: reads files, prints, sets exit status
 └── examples/
     ├── demo/                # runnable demo (moon run examples/demo)
     └── cli/                 # sample schemas + data (configs/ for batch runs)
@@ -314,4 +196,4 @@ MoonCheck/
 
 ## License
 
-Apache-2.0
+Apache-2.0. Depends on [mizchi/jsonschema](https://github.com/mizchi/moonbit_jsonschema) (MIT).

@@ -147,7 +147,7 @@ test "parse: check-schema takes exactly one schema file" {
 test "usage and version text are non-empty" {
   assert_true(usage_text().contains("mooncheck validate"))
   assert_true(usage_text().contains("--report"))
-  assert_eq(version_text(), "mooncheck 0.1.0")
+  assert_eq(version_text(), "mooncheck 0.2.0")
 }
 
 // --- end-to-end flow ------------------------------------------------------
@@ -157,7 +157,7 @@ test "usage and version text are non-empty" {
 
 ///|
 test "cli flow: batch run over several documents" {
-  let schema_text = "{\"type\":\"object\",\"properties\":{\"age\":{\"type\":\"int\",\"required\":true,\"min\":0}}}"
+  let schema_text = "{\"type\":\"object\",\"required\":[\"age\"],\"properties\":{\"age\":{\"type\":\"integer\",\"minimum\":0}}}"
   let documents = [("a.json", "{\"age\": 3}"), ("b.json", "{\"age\": \"x\"}")]
   match
     parse_args([
@@ -180,7 +180,7 @@ test "cli flow: batch run over several documents" {
       let rendered = render(report, opts.format, opts.quiet)
       assert_true(rendered.contains("\"ok\": false"))
       assert_true(rendered.contains("\"failed\": 1"))
-      assert_true(rendered.contains("expected Int, got String"))
+      assert_true(rendered.contains("\"kind\": \"type_mismatch\""))
     }
     _ => fail("expected Validate")
   }
@@ -202,7 +202,7 @@ test "cli flow: a malformed document is reported instead of fatal" {
 ///|
 test "cli flow: a broken schema is reported separately from data" {
   match parse_schema_text("{\"type\":\"nope\"}") {
-    Err(reason) => assert_true(reason.contains("unknown schema type"))
+    Err(reason) => assert_true(reason.contains("unknown type \"nope\""))
     Ok(_) => fail("a broken schema must not parse")
   }
 }

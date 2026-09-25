@@ -11,10 +11,11 @@ fn main {
   let rest_schema =
     #|{
     #|  "type": "object",
+    #|  "required": ["username", "age"],
     #|  "properties": {
-    #|    "username": { "type": "string", "required": true, "minLength": 3, "maxLength": 20 },
-    #|    "age":      { "type": "int", "required": true, "min": 0, "max": 150 },
-    #|    "email":    { "type": "string", "required": false }
+    #|    "username": { "type": "string", "minLength": 3, "maxLength": 20 },
+    #|    "age":      { "type": "integer", "minimum": 0, "maximum": 150 },
+    #|    "email":    { "type": "string" }
     #|  }
     #|}
   let rest_data =
@@ -25,11 +26,12 @@ fn main {
   let cfg_schema =
     #|{
     #|  "type": "object",
+    #|  "required": ["host", "port"],
     #|  "properties": {
-    #|    "host":    { "type": "string", "required": true, "minLength": 1 },
-    #|    "port":    { "type": "int", "required": true, "min": 1, "max": 65535 },
-    #|    "debug":   { "type": "bool", "required": false },
-    #|    "timeout": { "type": "int", "required": false, "min": 0 }
+    #|    "host":    { "type": "string", "minLength": 1 },
+    #|    "port":    { "type": "integer", "minimum": 1, "maximum": 65535 },
+    #|    "debug":   { "type": "boolean" },
+    #|    "timeout": { "type": "integer", "minimum": 0 }
     #|  }
     #|}
   let cfg_data =
@@ -40,15 +42,23 @@ fn main {
   let tool_schema =
     #|{
     #|  "type": "object",
+    #|  "required": ["action", "x", "y"],
     #|  "properties": {
-    #|    "action": { "type": "string", "required": true, "enum": ["click", "type", "scroll"] },
-    #|    "x":      { "type": "int", "required": true, "min": 0, "max": 1920 },
-    #|    "y":      { "type": "int", "required": true, "min": 0, "max": 1080 }
+    #|    "action": { "type": "string", "enum": ["click", "type", "scroll"] },
+    #|    "x":      { "type": "integer", "minimum": 0, "maximum": 1920 },
+    #|    "y":      { "type": "integer", "minimum": 0, "maximum": 1080 }
     #|  }
     #|}
   let tool_data =
     #|{ "action": "click", "x": 123, "y": 456 }
   run(tool_schema, tool_data)
+
+  println("\n== A schema with typos is refused, not silently accepted ==")
+  let typo_schema =
+    #|{ "type": "object", "properties": { "port": { "type": "int", "min": 1 } } }
+  let typo_data =
+    #|{ "port": "not a number" }
+  run(typo_schema, typo_data)
 }
 
 ///|

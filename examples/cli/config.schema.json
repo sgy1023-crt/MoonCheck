@@ -1,9 +1,10 @@
 {
   "type": "object",
+  "required": ["host", "port"],
   "properties": {
-    "host":    { "type": "string", "required": true, "minLength": 1 },
-    "port":    { "type": "int", "required": true, "min": 1, "max": 65535 },
-    "debug":   { "type": "bool", "required": false },
-    "timeout": { "type": "int", "required": false, "min": 0, "max": 600 }
+    "host":    { "type": "string", "minLength": 1 },
+    "port":    { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "debug":   { "type": "boolean" },
+    "timeout": { "type": "integer", "minimum": 0, "maximum": 600 }
   }
 }

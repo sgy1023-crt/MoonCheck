@@ -1,23 +1,24 @@
-// The MoonCheck validation engine.
+// Validation, delegated to `mizchi/jsonschema`.
 //
-// `validate` walks a JSON value against a schema, collecting every problem it
-// finds (rather than stopping at the first). Errors are reported in the order
-// the schema declares things, so results are deterministic.
+// This file is an adapter: `mizchi/jsonschema` does the schema checking, and
+// MoonCheck maps each of its errors to a flat `ValidationError` with a
+// `$.a[0]`-style path and a stable `ErrorKind`, which is what the reports and
+// exit codes are built on.
 
 ///|
 /// Validate a JSON value against a schema.
 ///
 /// Returns all validation errors. An empty array means the value is valid.
-/// Undeclared fields of an object are ignored.
-pub fn validate(schema : Type, value : Json) -> Array[ValidationError] {
-  let out : Array[ValidationError] = []
-  check(schema, value, "$", out)
-  return out
+pub fn validate(schema : Schema, value : Json) -> Array[ValidationError] {
+  match schema.validator.validate(value) {
+    Ok(_) => []
+    Err(errors) => errors.map(convert)
+  }
 }
 
 ///|
 /// Convenience: `true` when `validate` finds no error.
-pub fn is_valid(schema : Type, value : Json) -> Bool {
+pub fn is_valid(schema : Schema, value : Json) -> Bool {
   validate(schema, value).is_empty()
 }
 
@@ -37,7 +38,7 @@ pub fn validate_strings(
   let data = @json.parse(data_text) catch {
     err => return Err("data is not valid JSON: \{err}")
   }
-  return Ok(validate(schema, data))
+  Ok(validate(schema, data))
 }
 
 ///|
@@ -45,7 +46,7 @@ pub fn validate_strings(
 ///
 /// Batch and CLI callers parse the schema once and reuse it for every data
 /// document, so a broken schema is reported separately from data errors.
-pub fn parse_schema_text(text : String) -> Result[Type, String] {
+pub fn parse_schema_text(text : String) -> Result[Schema, String] {
   Ok(parse_schema_string(text)) catch {
     SchemaError::InvalidSchema(msg) => Err(msg)
   }
@@ -58,7 +59,7 @@ pub fn parse_schema_text(text : String) -> Result[Type, String] {
 /// reported as a single `InvalidJson` error instead of aborting the call, so
 /// callers that process many documents can keep going and report everything.
 pub fn validate_text(
-  schema : Type,
+  schema : Schema,
   data_text : String,
 ) -> Array[ValidationError] {
   let data = @json.parse(data_text) catch {
@@ -71,238 +72,69 @@ pub fn validate_text(
         },
       ]
   }
-  return validate(schema, data)
+  validate(schema, data)
 }
 
 ///|
-fn check(
-  typ : Type,
-  value : Json,
-  path : String,
-  out : Array[ValidationError],
-) -> Unit {
-  match typ {
-    Str(spec) => check_string(spec, value, path, out)
-    Num(spec) => check_numeric(spec, value, path, out, false)
-    Int(spec) => check_numeric(spec, value, path, out, true)
-    Bool => check_bool(value, path, out)
-    Obj(spec) => check_object(spec, value, path, out)
-    Arr(spec) => check_array(spec, value, path, out)
+fn convert(error : @jsonschema.ValidationError) -> ValidationError {
+  {
+    path: data_path(error.json_path),
+    kind: classify(error.schema_path, error.message),
+    message: error.message,
   }
 }
 
 ///|
-fn check_string(
-  spec : StrSpec,
-  value : Json,
-  path : String,
-  out : Array[ValidationError],
-) -> Unit {
-  match value {
-    String(s) => {
-      let len = s.char_length()
-      if spec.min_length is Some(m) && len < m {
-        out.push({
-          path,
-          kind: TooShort,
-          message: "length must be at least \{m}, got \{len}",
-        })
-      }
-      if spec.max_length is Some(m) && len > m {
-        out.push({
-          path,
-          kind: TooLong,
-          message: "length must be at most \{m}, got \{len}",
-        })
-      }
-    }
-    _ => push_type_error(path, "String", value, out)
+/// Render a data pointer as `$`, `$.user.age` or `$.tags[0]`.
+fn data_path(pointer : @jsonschema.JsonPointer) -> String {
+  match pointer {
+    Root => "$"
+    Key(parent, key~) => "\{data_path(parent)}.\{key}"
+    Index(parent, index~) => "\{data_path(parent)}[\{index}]"
   }
 }
 
 ///|
-fn check_numeric(
-  spec : NumSpec,
-  value : Json,
-  path : String,
-  out : Array[ValidationError],
-  integer_only : Bool,
-) -> Unit {
-  match value {
-    Number(n, ..) => {
-      if !is_finite(n) {
-        out.push({
-          path,
-          kind: InvalidNumber,
-          message: "number must be finite",
-        })
-        return
-      }
-      if integer_only && !is_integer(n) {
-        push_type_error(path, "Int", value, out)
-        return
-      }
-      if spec.min is Some(m) && n < m {
-        out.push({
-          path,
-          kind: BelowMinimum,
-          message: "value must be at least \{fmt_num(m)}, got \{fmt_num(n)}",
-        })
-      }
-      if spec.max is Some(m) && n > m {
-        out.push({
-          path,
-          kind: AboveMaximum,
-          message: "value must be at most \{fmt_num(m)}, got \{fmt_num(n)}",
-        })
-      }
-    }
-    _ => {
-      let expected = if integer_only { "Int" } else { "Number" }
-      push_type_error(path, expected, value, out)
+/// Classify an error by the schema keyword that produced it.
+///
+/// `mizchi/jsonschema` points `schema_path` at the failing keyword (for
+/// example `#/properties/age/minimum`). Errors raised by a whole schema node
+/// (wrong type, a bare `enum`, `const`) point at the node itself instead, so
+/// those are told apart by their message.
+fn classify(
+  schema_path : @jsonschema.JsonPointer,
+  message : String,
+) -> ErrorKind {
+  if is_node(schema_path) {
+    return if message.has_prefix("Value does not match constant") ||
+      message.has_prefix("Failed to resolve") ||
+      message.has_prefix("Array does not have item") {
+      Constraint
+    } else if message.contains(" is not in ") {
+      NotInEnum
+    } else {
+      Type
     }
   }
-}
-
-///|
-fn check_bool(
-  value : Json,
-  path : String,
-  out : Array[ValidationError],
-) -> Unit {
-  match value {
-    True | False => ()
-    _ => push_type_error(path, "Bool", value, out)
+  match schema_path {
+    Key(_, key="required") => MissingRequired
+    Key(_, key="minimum") | Key(_, key="exclusiveMinimum") => BelowMinimum
+    Key(_, key="maximum") | Key(_, key="exclusiveMaximum") => AboveMaximum
+    Key(_, key="minLength") | Key(_, key="minItems") => TooShort
+    Key(_, key="maxLength") | Key(_, key="maxItems") => TooLong
+    Key(_, key="enum") => NotInEnum
+    _ => Constraint
   }
 }
 
 ///|
-fn check_object(
-  spec : ObjSpec,
-  value : Json,
-  path : String,
-  out : Array[ValidationError],
-) -> Unit {
-  match value {
-    Object(members) =>
-      for (name, prop) in spec.properties {
-        let field_path = child_path(path, name)
-        match members.get(name) {
-          None =>
-            if prop.required {
-              out.push({
-                path: field_path,
-                kind: MissingRequired,
-                message: "required field is missing",
-              })
-            }
-          Some(field_value) => {
-            check(prop.typ, field_value, field_path, out)
-            if prop.enums is Some(allowed) && !in_list(allowed, field_value) {
-              let list = Json::array(allowed).stringify()
-              out.push({
-                path: field_path,
-                kind: NotInEnum,
-                message: "value must be one of \{list}",
-              })
-            }
-          }
-        }
-      }
-    _ => push_type_error(path, "Object", value, out)
+/// `true` when `schema_path` points at a schema node rather than a keyword.
+fn is_node(schema_path : @jsonschema.JsonPointer) -> Bool {
+  match schema_path {
+    Root => true
+    Key(Key(_, key="properties"), ..) => true
+    Key(_, key="items") | Key(_, key="$ref") => true
+    Index(_, ..) => true
+    _ => false
   }
-}
-
-///|
-fn check_array(
-  spec : ArrSpec,
-  value : Json,
-  path : String,
-  out : Array[ValidationError],
-) -> Unit {
-  match value {
-    Array(items) => {
-      let len = items.length()
-      if spec.min_length is Some(m) && len < m {
-        out.push({
-          path,
-          kind: TooShort,
-          message: "length must be at least \{m}, got \{len}",
-        })
-      }
-      if spec.max_length is Some(m) && len > m {
-        out.push({
-          path,
-          kind: TooLong,
-          message: "length must be at most \{m}, got \{len}",
-        })
-      }
-      for i in 0..<len {
-        check(spec.item, items[i], "\{path}[\{i}]", out)
-      }
-    }
-    _ => push_type_error(path, "Array", value, out)
-  }
-}
-
-///|
-fn push_type_error(
-  path : String,
-  expected : String,
-  value : Json,
-  out : Array[ValidationError],
-) -> Unit {
-  let got = value_name(value)
-  out.push({ path, kind: Type, message: "expected \{expected}, got \{got}", })
-}
-
-///|
-fn child_path(path : String, name : String) -> String {
-  if path == "$" {
-    "$.\{name}"
-  } else {
-    "\{path}.\{name}"
-  }
-}
-
-///|
-/// Element-wise membership test (requires `Json` equality).
-fn in_list(values : Array[Json], value : Json) -> Bool {
-  for v in values {
-    if v == value {
-      return true
-    }
-  }
-  return false
-}
-
-///|
-fn is_finite(n : Double) -> Bool {
-  !n.is_nan() && n != @double.infinity && n != @double.neg_infinity
-}
-
-///|
-/// `true` when `n` is an integer-valued finite double (no fractional part).
-fn is_integer(n : Double) -> Bool {
-  is_finite(n) && n == @double.floor(n)
-}
-
-///|
-/// Format a double for error messages without a trailing `.0` on whole numbers
-/// that fit in an `Int64`.
-fn fmt_num(n : Double) -> String {
-  if n.is_nan() {
-    return "NaN"
-  }
-  if n == @double.infinity {
-    return "infinity"
-  }
-  if n == @double.neg_infinity {
-    return "-infinity"
-  }
-  let whole = n.to_int64()
-  if n == whole.to_double() {
-    return whole.to_string()
-  }
-  return n.to_string()
 }
